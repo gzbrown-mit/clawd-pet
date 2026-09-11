@@ -208,7 +208,8 @@ final class StatusBarController: NSObject, NSMenuDelegate {
     @objc private func openSession(_ sender: NSMenuItem) {
         guard let id = sender.representedObject as? String, let s = model.sessions[id] else { return }
         model.acknowledge(id: id)
-        PetController.openInEditor(cwd: s.cwd)
+        let outcome = PetController.openInEditor(cwd: s.cwd)
+        model.note("Open \(s.name): \(outcome)")
     }
 
     @objc private func toggleMute(_ sender: NSMenuItem) {

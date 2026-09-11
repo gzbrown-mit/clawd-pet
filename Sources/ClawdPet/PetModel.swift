@@ -456,9 +456,15 @@ final class PetModel {
         }
     }
 
+    /// Adds a line to the Recent events menu.
+    func note(_ line: String) {
+        log(line)
+        onChange?()
+    }
+
     private func log(_ line: String) {
         recentEvents.insert("\(timeFmt.string(from: Date()))  \(line)", at: 0)
-        if recentEvents.count > 12 { recentEvents.removeLast() }
+        if recentEvents.count > 14 { recentEvents.removeLast() }
     }
 }
 

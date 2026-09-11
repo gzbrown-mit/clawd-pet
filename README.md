@@ -81,11 +81,11 @@ the project name and brings that one forward, even if it is minimised or on anot
 permission lets him read the title of the window in front, which is how he knows to stay quiet when
 you are already looking at the session that just finished.
 
-The app is ad-hoc signed, so after a rebuild macOS treats it as a new app and silently drops that
-grant: untick and re-tick ClawdPet in the Accessibility list if raising stops working. To keep the
-grant across rebuilds, make a self-signed code-signing certificate once (Keychain Access >
-Certificate Assistant > Create a Certificate, type Code Signing) and build with
-`CLAWDPET_SIGN_IDENTITY="<its name>" ./scripts/run.sh`.
+The build signs the app so that macOS recognises it by its bundle identifier rather than by the
+hash of one particular build, which keeps the Accessibility grant across rebuilds. If raising ever
+stops working after a rebuild, untick and re-tick ClawdPet in the Accessibility list. The Recent
+events submenu records what each click did ("raised ... in Code", or why it fell back to just
+bringing the editor forward), and `ClawdPet --raise /path/to/project` tries it from the terminal.
 
 Click him when nothing is waiting to pet him. Drag him to set a new home spot (he wriggles the
 whole way). Right-click or use the menu bar icon for sessions, meters, settings, and a Playground

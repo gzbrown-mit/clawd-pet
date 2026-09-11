@@ -21,10 +21,12 @@ iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/ClawdPet.icns" 2>/dev/nu
 rm -rf "$ICONSET"
 
 # Ad-hoc signature keeps macOS happy about launch-at-login and network listening.
-# Every ad-hoc build looks like a new app to macOS, which drops the Accessibility
-# grant. Set CLAWDPET_SIGN_IDENTITY to a self-signed code-signing certificate
-# (Keychain Access > Certificate Assistant) to keep the grant across rebuilds.
-codesign --force --deep --sign "${CLAWDPET_SIGN_IDENTITY:--}" "$APP" >/dev/null 2>&1 || echo "codesign skipped"
+# A plain ad-hoc signature identifies the app by the hash of this exact build, so
+# macOS forgets the Accessibility grant on every rebuild. Pinning the designated
+# requirement to the bundle identifier instead keeps the grant across rebuilds.
+# Set CLAWDPET_SIGN_IDENTITY to sign with a real or self-signed certificate.
+codesign --force --deep --sign "${CLAWDPET_SIGN_IDENTITY:--}" --identifier dev.clawdpet.app \
+  -r '=designated => identifier "dev.clawdpet.app"' "$APP" >/dev/null 2>&1 || echo "codesign skipped"
 
 echo "Built $APP"
 echo "Run it:      open $APP"

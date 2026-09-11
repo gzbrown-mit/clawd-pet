@@ -420,7 +420,8 @@ final class PetController {
             return
         }
         if let s = model.acknowledgeOne() {
-            PetController.openInEditor(cwd: s.cwd)
+            let outcome = PetController.openInEditor(cwd: s.cwd)
+            model.note("Click on \(s.name): \(outcome)")
             pettedUntil = Date().addingTimeInterval(1.5)
             offerAccessibilityOnce()
             return
@@ -453,13 +454,18 @@ final class PetController {
 
     /// Best case: raise the window that already has this project open (needs
     /// Accessibility). Otherwise just bring the editor, or failing that a terminal,
-    /// to the front with all its windows. It never opens the folder itself: VS Code
-    /// answers that with a second window.
-    static func openInEditor(cwd: String) {
-        if WindowRaiser.raise(cwd: cwd) { return }
+    /// to the front. It never opens the folder itself: VS Code answers that with a
+    /// second window. Returns a one-line description for the event log.
+    @discardableResult
+    static func openInEditor(cwd: String) -> String {
+        let outcome = WindowRaiser.raise(cwd: cwd)
+        if case .raised = outcome { return outcome.summary }
         let running = NSWorkspace.shared.runningApplications
         let ids = editorBundleIDs + WindowRaiser.terminalBundleIDs
-        guard let app = ids.lazy.compactMap({ id in running.first { $0.bundleIdentifier == id } }).first else { return }
-        app.activate(options: [.activateAllWindows])
+        guard let app = ids.lazy.compactMap({ id in running.first { $0.bundleIdentifier == id } }).first else {
+            return outcome.summary + "; no editor or terminal running"
+        }
+        WindowRaiser.activate(app)
+        return outcome.summary + "; brought \(app.localizedName ?? "the editor") forward instead"
     }
 }

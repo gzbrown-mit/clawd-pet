@@ -37,11 +37,27 @@ enum WindowRaiser {
         return out
     }
 
-    /// Returns true if a matching window was raised.
-    static func raise(cwd: String) -> Bool {
-        guard isTrusted else { return false }
+    enum Outcome {
+        case raised(title: String, app: String)
+        case notTrusted
+        case noMatch(name: String, titles: [String])
+
+        var summary: String {
+            switch self {
+            case .raised(let t, let a): return "raised \"\(t)\" in \(a)"
+            case .notTrusted: return "Accessibility is off"
+            case .noMatch(let n, let titles):
+                return "no window titled like \"\(n)\"" + (titles.isEmpty ? "" : " among: " + titles.joined(separator: " | "))
+            }
+        }
+    }
+
+    /// Raises the window whose title carries the project name, if allowed and found.
+    static func raise(cwd: String) -> Outcome {
         let wanted = names(for: cwd)
-        guard !wanted.isEmpty else { return false }
+        let name = wanted.first ?? cwd
+        guard isTrusted else { return .notTrusted }
+        guard !wanted.isEmpty else { return .noMatch(name: name, titles: []) }
         let running = NSWorkspace.shared.runningApplications
         let apps = (PetController.editorBundleIDs + terminalBundleIDs)
             .compactMap { id in running.first { $0.bundleIdentifier == id } }
@@ -59,23 +75,25 @@ enum WindowRaiser {
                 candidates.append((app, w, title))
             }
         }
-        guard !candidates.isEmpty else { return false }
+        guard !candidates.isEmpty else { return .noMatch(name: name, titles: []) }
 
         // Pass 1: a title segment equals the folder name ("file.py — miniASKCOS").
         // Pass 2: the folder name appears anywhere in the title.
         for name in wanted {
             let lower = name.lowercased()
             if let hit = candidates.first(where: { segments($0.title).contains(lower) }) {
-                return bring(hit.window, of: hit.app)
+                bring(hit.window, of: hit.app)
+                return .raised(title: hit.title, app: hit.app.localizedName ?? "editor")
             }
         }
         for name in wanted {
             let lower = name.lowercased()
             if let hit = candidates.first(where: { $0.title.lowercased().contains(lower) }) {
-                return bring(hit.window, of: hit.app)
+                bring(hit.window, of: hit.app)
+                return .raised(title: hit.title, app: hit.app.localizedName ?? "editor")
             }
         }
-        return false
+        return .noMatch(name: name, titles: candidates.map { $0.title })
     }
 
     /// Title of the window the user is looking at, when the frontmost app is an editor
@@ -101,20 +119,42 @@ enum WindowRaiser {
         return names(for: cwd).contains { segs.contains($0.lowercased()) }
     }
 
+    /// Splits a window title on any dash surrounded by whitespace, so
+    /// "file.py — project", "file.py - project" and "file.py – project" all work.
     static func segments(_ title: String) -> [String] {
-        title.lowercased()
-            .replacingOccurrences(of: " — ", with: "\u{1}")
-            .replacingOccurrences(of: " - ", with: "\u{1}")
-            .replacingOccurrences(of: " – ", with: "\u{1}")
-            .split(separator: "\u{1}")
-            .map { $0.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: "● ", with: "") }
+        let lower = title.lowercased()
+        let ns = lower as NSString
+        let dash = try! NSRegularExpression(pattern: "\\s+[-\u{2013}\u{2014}]\\s+")
+        var parts: [String] = []
+        var last = 0
+        for m in dash.matches(in: lower, range: NSRange(location: 0, length: ns.length)) {
+            parts.append(ns.substring(with: NSRange(location: last, length: m.range.location - last)))
+            last = m.range.location + m.range.length
+        }
+        parts.append(ns.substring(from: last))
+        return parts.map { $0.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: "● ", with: "") }
     }
 
-    private static func bring(_ window: AXUIElement, of app: NSRunningApplication) -> Bool {
+    private static func bring(_ window: AXUIElement, of app: NSRunningApplication) {
+        let axApp = AXUIElementCreateApplication(app.processIdentifier)
         AXUIElementSetAttributeValue(window, kAXMinimizedAttribute as CFString, kCFBooleanFalse)
         AXUIElementSetAttributeValue(window, kAXMainAttribute as CFString, kCFBooleanTrue)
-        let raised = AXUIElementPerformAction(window, kAXRaiseAction as CFString)
-        app.activate()
-        return raised == .success
+        AXUIElementSetAttributeValue(axApp, kAXFocusedWindowAttribute as CFString, window)
+        AXUIElementPerformAction(window, kAXRaiseAction as CFString)
+        activate(app)
+    }
+
+    /// Brings an app to the front through Launch Services. A plain
+    /// NSRunningApplication.activate() from a background accessory app is often
+    /// refused on macOS 14 and later, so the window would be raised inside the
+    /// editor without the editor itself coming forward.
+    static func activate(_ app: NSRunningApplication) {
+        if let url = app.bundleURL {
+            let config = NSWorkspace.OpenConfiguration()
+            config.activates = true
+            NSWorkspace.shared.openApplication(at: url, configuration: config)
+        } else {
+            app.activate(options: [.activateAllWindows])
+        }
     }
 }

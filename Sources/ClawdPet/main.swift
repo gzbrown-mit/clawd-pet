@@ -11,6 +11,7 @@ ClawdPet: an 8-bit desk pet that watches your Claude Code sessions.
   ClawdPet --render-icon DIR  write an .iconset folder (used by build.sh)
   ClawdPet --render-sheet PNG write a sprite sheet of every animation
   ClawdPet --scan           list the Claude sessions found in ~/.claude/projects transcripts
+  ClawdPet --raise DIR      raise the editor window for a project folder and report what happened
 """
 
 let argv = Array(CommandLine.arguments.dropFirst())
@@ -31,6 +32,13 @@ if argv.contains("--scan") {
         let title = snap.title ?? "(no title yet)"
         print("\(fmt.string(from: snap.modified))  \(snap.lastKind.rawValue.padding(toLength: 17, withPad: " ", startingAt: 0))  \((snap.cwd as NSString).lastPathComponent)  —  \(title)  [\(snap.id.prefix(8))]")
     }
+    exit(0)
+}
+if let dir = flagValue("--raise") {
+    print("Accessibility trusted for this process: \(WindowRaiser.isTrusted)")
+    print("Looking for: \(WindowRaiser.names(for: dir).joined(separator: ", "))")
+    print(PetController.openInEditor(cwd: dir))
+    RunLoop.main.run(until: Date().addingTimeInterval(1))   // let the activation request go out
     exit(0)
 }
 if let path = flagValue("--render-sheet") {
