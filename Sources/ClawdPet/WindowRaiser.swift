@@ -38,13 +38,13 @@ enum WindowRaiser {
     }
 
     enum Outcome {
-        case raised(title: String, app: String)
+        case raised(title: String, app: String, detail: String)
         case notTrusted
         case noMatch(name: String, titles: [String])
 
         var summary: String {
             switch self {
-            case .raised(let t, let a): return "raised \"\(t)\" in \(a)"
+            case .raised(let t, let a, let d): return "raised \"\(t)\" in \(a) (\(d))"
             case .notTrusted: return "Accessibility is off"
             case .noMatch(let n, let titles):
                 return "no window titled like \"\(n)\"" + (titles.isEmpty ? "" : " among: " + titles.joined(separator: " | "))
@@ -82,15 +82,15 @@ enum WindowRaiser {
         for name in wanted {
             let lower = name.lowercased()
             if let hit = candidates.first(where: { segments($0.title).contains(lower) }) {
-                bring(hit.window, of: hit.app)
-                return .raised(title: hit.title, app: hit.app.localizedName ?? "editor")
+                let detail = bring(hit.window, of: hit.app)
+                return .raised(title: hit.title, app: hit.app.localizedName ?? "editor", detail: detail)
             }
         }
         for name in wanted {
             let lower = name.lowercased()
             if let hit = candidates.first(where: { $0.title.lowercased().contains(lower) }) {
-                bring(hit.window, of: hit.app)
-                return .raised(title: hit.title, app: hit.app.localizedName ?? "editor")
+                let detail = bring(hit.window, of: hit.app)
+                return .raised(title: hit.title, app: hit.app.localizedName ?? "editor", detail: detail)
             }
         }
         return .noMatch(name: name, titles: candidates.map { $0.title })
@@ -99,16 +99,27 @@ enum WindowRaiser {
     /// Title of the window the user is looking at, when the frontmost app is an editor
     /// or terminal and Accessibility allows us to ask.
     static func frontWindowTitle() -> String? {
-        guard isTrusted, let app = NSWorkspace.shared.frontmostApplication,
-              let id = app.bundleIdentifier,
-              (PetController.editorBundleIDs + terminalBundleIDs).contains(id) else { return nil }
+        guard isTrusted else { Diag.log("front window unknown: Accessibility not trusted"); return nil }
+        guard let app = NSWorkspace.shared.frontmostApplication, let id = app.bundleIdentifier else { return nil }
+        guard (PetController.editorBundleIDs + terminalBundleIDs).contains(id) else {
+            Diag.log("front app \(id) is not an editor or terminal")
+            return nil
+        }
         let axApp = AXUIElementCreateApplication(app.processIdentifier)
         var w: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(axApp, kAXFocusedWindowAttribute as CFString, &w) == .success,
-              let win = w, CFGetTypeID(win) == AXUIElementGetTypeID() else { return nil }
+        let err = AXUIElementCopyAttributeValue(axApp, kAXFocusedWindowAttribute as CFString, &w)
+        guard err == .success, let win = w, CFGetTypeID(win) == AXUIElementGetTypeID() else {
+            Diag.log("focused window of \(id) unavailable (AXError \(err.rawValue))")
+            return nil
+        }
         var t: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(win as! AXUIElement, kAXTitleAttribute as CFString, &t) == .success else { return nil }
-        return t as? String
+        let terr = AXUIElementCopyAttributeValue(win as! AXUIElement, kAXTitleAttribute as CFString, &t)
+        guard terr == .success, let title = t as? String else {
+            Diag.log("focused window of \(id) has no title (AXError \(terr.rawValue))")
+            return nil
+        }
+        Diag.log("front window of \(id): \(title)")
+        return title
     }
 
     /// True when the window in front carries this project's name, i.e. the user is
@@ -135,13 +146,15 @@ enum WindowRaiser {
         return parts.map { $0.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: "● ", with: "") }
     }
 
-    private static func bring(_ window: AXUIElement, of app: NSRunningApplication) {
+    /// Returns the AX result codes (0 = success) for the event log.
+    private static func bring(_ window: AXUIElement, of app: NSRunningApplication) -> String {
         let axApp = AXUIElementCreateApplication(app.processIdentifier)
-        AXUIElementSetAttributeValue(window, kAXMinimizedAttribute as CFString, kCFBooleanFalse)
-        AXUIElementSetAttributeValue(window, kAXMainAttribute as CFString, kCFBooleanTrue)
-        AXUIElementSetAttributeValue(axApp, kAXFocusedWindowAttribute as CFString, window)
-        AXUIElementPerformAction(window, kAXRaiseAction as CFString)
+        let e1 = AXUIElementSetAttributeValue(window, kAXMinimizedAttribute as CFString, kCFBooleanFalse)
+        let e2 = AXUIElementSetAttributeValue(window, kAXMainAttribute as CFString, kCFBooleanTrue)
+        let e3 = AXUIElementSetAttributeValue(axApp, kAXFocusedWindowAttribute as CFString, window)
+        let e4 = AXUIElementPerformAction(window, kAXRaiseAction as CFString)
         activate(app)
+        return "AX unminimize \(e1.rawValue), main \(e2.rawValue), focus \(e3.rawValue), raise \(e4.rawValue)"
     }
 
     /// Brings an app to the front through Launch Services. A plain

@@ -85,10 +85,18 @@ Only ClawdPet needs to be ticked in that list. The permission belongs to the app
 and raising, not to the app being raised, so VS Code, Cursor, and your terminal need nothing.
 
 The build signs the app so that macOS recognises it by its bundle identifier rather than by the
-hash of one particular build, which keeps the Accessibility grant across rebuilds. If raising ever
-stops working after a rebuild, untick and re-tick ClawdPet in the Accessibility list. The Recent
-events submenu records what each click did ("raised ... in Code", or why it fell back to just
-bringing the editor forward), and `ClawdPet --raise /path/to/project` tries it from the terminal.
+hash of one particular build, which keeps the Accessibility grant across rebuilds. If the grant
+ever goes stale anyway (macOS logs "Failed to match existing code requirement"), unticking and
+re-ticking does not help: the old record has to go. Run `tccutil reset Accessibility
+dev.clawdpet.app`, relaunch Clawd, and accept the prompt it shows. He asks at launch whenever the
+grant is missing.
+
+To see what he decided, open the Recent events submenu or `tail ~/Library/Logs/ClawdPet.log`. Each
+click logs "raised ... in Code" or why it fell back to just bringing the editor forward, and each
+finished session logs the window in front and whether he stayed quiet. `ClawdPet --raise
+/path/to/project` tries a raise from the terminal, and
+`curl -X POST localhost:4242/raise -d '{"cwd":"/path/to/project"}'` does the same through the
+running app.
 
 Click him when nothing is waiting to pet him. Drag him to set a new home spot (he wriggles the
 whole way). Right-click or use the menu bar icon for sessions, meters, settings, and a Playground

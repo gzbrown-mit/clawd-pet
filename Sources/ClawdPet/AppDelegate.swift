@@ -22,6 +22,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let s = try HookServer(port: Prefs.port)
             s.onHook = { PetModel.shared.handle(event: $0) }
             s.onStatus = { PetModel.shared.handle(status: $0) }
+            s.onRaise = { json in
+                guard let cwd = json["cwd"] as? String else { return }
+                let outcome = PetController.openInEditor(cwd: cwd)
+                PetModel.shared.note("Raise test for \((cwd as NSString).lastPathComponent): \(outcome)")
+            }
             s.start()
             server = s
         } catch {
@@ -30,6 +35,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         controller.start()
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev"
+        Diag.log("launched \(version) pid \(ProcessInfo.processInfo.processIdentifier), Accessibility trusted: \(WindowRaiser.isTrusted)")
+
+        // The grant was wanted before but is missing now (a rebuild used to drop it):
+        // ask macOS to show the "control this computer" prompt so it can be re-added.
+        if !WindowRaiser.isTrusted, Prefs.offeredAccessibility, !demo {
+            WindowRaiser.requestTrust()
+        }
 
         scanner.onResult = { snaps in
             if Prefs.scanTranscripts { PetModel.shared.apply(snapshots: snaps) }

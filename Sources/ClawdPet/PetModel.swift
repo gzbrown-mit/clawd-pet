@@ -1,5 +1,22 @@
 import AppKit
 
+/// Appends diagnostics to ~/Library/Logs/ClawdPet.log so raise and alert decisions
+/// can be inspected without a debugger.
+enum Diag {
+    static let path = NSHomeDirectory() + "/Library/Logs/ClawdPet.log"
+    private static let fmt: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd HH:mm:ss"; return f
+    }()
+    static func log(_ line: String) {
+        let text = "\(fmt.string(from: Date()))  \(line)\n"
+        if let h = FileHandle(forWritingAtPath: path) {
+            h.seekToEndOfFile(); h.write(Data(text.utf8)); h.closeFile()
+        } else {
+            try? text.write(toFile: path, atomically: true, encoding: .utf8)
+        }
+    }
+}
+
 enum Prefs {
     private static let d = UserDefaults.standard
 
@@ -317,7 +334,10 @@ final class PetModel {
 
     /// True when the user is already looking at this session's window.
     private func userIsLooking(at s: Session) -> Bool {
-        Prefs.skipFrontWindow && WindowRaiser.frontWindowShows(cwd: s.cwd)
+        guard Prefs.skipFrontWindow else { return false }
+        let looking = WindowRaiser.frontWindowShows(cwd: s.cwd)
+        Diag.log("\(s.name) wants attention; user already looking at it: \(looking)")
+        return looking
     }
 
     private func parseLimit(_ any: Any?) -> RateLimit? {
@@ -456,8 +476,9 @@ final class PetModel {
         }
     }
 
-    /// Adds a line to the Recent events menu.
+    /// Adds a line to the Recent events menu and the system log.
     func note(_ line: String) {
+        Diag.log(line)
         log(line)
         onChange?()
     }

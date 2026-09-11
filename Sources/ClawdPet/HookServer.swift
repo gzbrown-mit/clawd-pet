@@ -8,6 +8,8 @@ final class HookServer {
     let port: UInt16
     var onHook: (([String: Any]) -> Void)?
     var onStatus: (([String: Any]) -> Void)?
+    /// Debug aid: POST /raise {"cwd": "..."} behaves like clicking the pet for that project.
+    var onRaise: (([String: Any]) -> Void)?
     private(set) var lastError: String?
 
     init(port: UInt16) throws {
@@ -76,7 +78,9 @@ final class HookServer {
             let json = (try? JSONSerialization.jsonObject(with: body)) as? [String: Any]
             if let json = json {
                 DispatchQueue.main.async { [weak self] in
-                    if path.hasPrefix("/status") { self?.onStatus?(json) } else { self?.onHook?(json) }
+                    if path.hasPrefix("/status") { self?.onStatus?(json) }
+                    else if path.hasPrefix("/raise") { self?.onRaise?(json) }
+                    else { self?.onHook?(json) }
                 }
             } else {
                 reply = "bad json"
