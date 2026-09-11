@@ -41,7 +41,7 @@ enum Palette {
     ]
 }
 
-enum Eyes { case open, blink, happy, droopy, x, sad, wink, down }
+enum Eyes { case open, blink, happy, droopy, x, sad, wink, down, angry }
 enum Legs { case stand, walkA, walkB, tuck, spread, dangleA, dangleB }
 enum Mouth { case none, open, small, smile, frown }
 
@@ -53,6 +53,7 @@ struct Look {
     var squash = 0   // rows flattened off the top of the body
     var lift = 0     // rows lifted off the ground (jumping)
     var sick = false // green-tinted body
+    var hidden = false // no body at all (the curled-up ball is an overlay)
 }
 
 struct Overlay {
@@ -60,11 +61,14 @@ struct Overlay {
     let x: Int
     let y: Int
     let id: String
-    init(_ rows: [String], x: Int, y: Int, id: String = "") {
+    /// Glyphs like "?" and "Z" must not be flipped when the pet faces left.
+    let keepOrientation: Bool
+    init(_ rows: [String], x: Int, y: Int, id: String = "", keepOrientation: Bool = false) {
         self.rows = rows
         self.x = x
         self.y = y
         self.id = id
+        self.keepOrientation = keepOrientation
     }
 }
 
@@ -77,14 +81,14 @@ enum Overlays {
                  "...yy.",
                  "..yy..",
                  "......",
-                 "..yy.."], x: 9, y: y, id: "query")
+                 "..yy.."], x: 9, y: y, id: "query", keepOrientation: true)
     }
 
     // Sleep: three Zs marching up and to the right.
-    static func zSmall(x: Int, y: Int) -> Overlay { Overlay(["nn", ".n", "nn"], x: x, y: y, id: "z") }
-    static func zMed(x: Int, y: Int) -> Overlay { Overlay(["nnn", "..n", ".n.", "nnn"], x: x, y: y, id: "z") }
+    static func zSmall(x: Int, y: Int) -> Overlay { Overlay(["nn", ".n", "nn"], x: x, y: y, id: "z", keepOrientation: true) }
+    static func zMed(x: Int, y: Int) -> Overlay { Overlay(["nnn", "..n", ".n.", "nnn"], x: x, y: y, id: "z", keepOrientation: true) }
     static func zBig(x: Int, y: Int) -> Overlay {
-        Overlay(["nnnn", "...n", "..n.", ".n..", "nnnn"], x: x, y: y, id: "z")
+        Overlay(["nnnn", "...n", "..n.", ".n..", "nnnn"], x: x, y: y, id: "z", keepOrientation: true)
     }
 
     // Dog bed: a low cushion in front of the pet with slightly raised ends. Nothing behind the head.
@@ -121,17 +125,52 @@ enum Overlays {
     static let thoughtTrail = Overlay(["ss", "ss"], x: 17, y: 5, id: "thought")
     static let thoughtDot = Overlay(["s"], x: 16, y: 8, id: "thought")
     static func note(x: Int, y: Int) -> Overlay {
-        Overlay(["..nn", "..n.", "nnn.", "nn.."], x: x, y: y, id: "note")
+        Overlay(["..nn", "..n.", "nnn.", "nn.."], x: x, y: y, id: "note", keepOrientation: true)
     }
     static let mess = Overlay(["..t..", ".ttt.", "ttttt"], x: 19, y: 20, id: "mess")
 
     // Feelings
+    static let anger = Overlay(["r.r", ".r.", "r.r"], x: 18, y: 5, id: "anger")
+    static func dust(x: Int) -> Overlay { Overlay([".h.", "h.h"], x: x, y: 20, id: "dust") }
     static func sweat(x: Int = 20, y: Int = 12) -> Overlay { Overlay([".n", "nn"], x: x, y: y, id: "sweat") }
     static func tear(y: Int) -> Overlay { Overlay([".n", "nn"], x: 8, y: y, id: "tear") }
     static func heart(x: Int, y: Int) -> Overlay { Overlay([".r.r.", "rrrrr", ".rrr.", "..r.."], x: x, y: y, id: "heart") }
     static func smallHeart(x: Int, y: Int) -> Overlay { Overlay(["p.p", "ppp", ".p."], x: x, y: y, id: "heart") }
     static func dots(_ n: Int) -> Overlay {
         Overlay([(0..<n).map { _ in "n" }.joined(separator: ".")], x: 13, y: 7, id: "dots")
+    }
+
+    /// Curled into a ball for a toss. `step` 0...3 turns the four tucked feet by 22.5°
+    /// each, which reads as a spin. The highlight and shade stay put: the light does
+    /// not travel with him.
+    static func curled(step: Int) -> Overlay {
+        let n = 12
+        var rows = Array(repeating: Array(repeating: Character("."), count: n), count: n)
+        let c = Double(n - 1) / 2
+        func diff(_ a: Double, _ b: Double) -> Double {
+            var d = a - b
+            while d > .pi { d -= 2 * .pi }
+            while d < -.pi { d += 2 * .pi }
+            return abs(d)
+        }
+        for y in 0..<n {
+            for x in 0..<n {
+                let dx = Double(x) - c, dy = Double(y) - c
+                let r = (dx * dx + dy * dy).squareRoot()
+                guard r <= 5.9 else { continue }
+                let a = atan2(dy, dx)                       // y grows downward
+                var ch: Character = "o"
+                if r >= 3.0, diff(a, -2.356) < 0.5 { ch = "l" }   // highlight, upper left
+                if r >= 4.9, diff(a, 0.785) < 1.1 { ch = "d" }    // shade, lower right
+                rows[y][x] = ch
+            }
+        }
+        for k in 0..<4 {
+            let a = Double(step) * (.pi / 8) + Double(k) * (.pi / 2)
+            let x = Int((c + 4.0 * cos(a)).rounded()), y = Int((c + 4.0 * sin(a)).rounded())
+            if x >= 0, x < n, y >= 0, y < n { rows[y][x] = "d" }
+        }
+        return Overlay(rows.map { String($0) }, x: 6, y: 9, id: "curled")
     }
 
     /// Laptop in front of the pet. The base is wider than the screen and the hinge is
@@ -149,10 +188,11 @@ enum Overlays {
 
 }
 
-/// Builds one frame from a body description plus decorations.
-func compose(_ look: Look, overlays: [Overlay], underlays: [Overlay] = []) -> Grid {
-    var g: Grid = Array(repeating: Array(repeating: Character("."), count: canvasW), count: canvasH)
-    func stamp(_ o: Overlay) {
+/// Builds one frame from a body description plus decorations. With `mirrored` the
+/// body and its props face left; glyph overlays keep their orientation.
+func compose(_ look: Look, overlays: [Overlay], underlays: [Overlay] = [], mirrored: Bool = false) -> Grid {
+    func blank() -> Grid { Array(repeating: Array(repeating: Character("."), count: canvasW), count: canvasH) }
+    func stamp(_ o: Overlay, into g: inout Grid) {
         for (dy, line) in o.rows.enumerated() {
             for (dx, ch) in line.enumerated() where ch != "." {
                 let y = o.y + dy, x = o.x + dx
@@ -161,7 +201,28 @@ func compose(_ look: Look, overlays: [Overlay], underlays: [Overlay] = []) -> Gr
             }
         }
     }
-    for o in underlays { stamp(o) }
+    var g = blank()
+    for o in underlays { stamp(o, into: &g) }
+    if !look.hidden { drawBody(look, into: &g) }
+    if look.sick {
+        let tint: [Character: Character] = ["o": "q", "d": "v", "l": "j"]
+        for y in 0..<canvasH { for x in 0..<canvasW { if let t = tint[g[y][x]] { g[y][x] = t } } }
+    }
+    if mirrored { g = g.map { Array($0.reversed()) } }
+
+    var layer = blank()
+    var fixed: [Overlay] = []
+    for o in overlays {
+        if o.keepOrientation { fixed.append(o) } else { stamp(o, into: &layer) }
+    }
+    if mirrored { layer = layer.map { Array($0.reversed()) } }
+    for y in 0..<canvasH { for x in 0..<canvasW where layer[y][x] != "." { g[y][x] = layer[y][x] } }
+    for o in fixed { stamp(o, into: &g) }
+    return g
+}
+
+/// The pet itself: body, eyes, mouth and feet.
+private func drawBody(_ look: Look, into g: inout Grid) {
 
     let ox = 4
     let oy = 9 - look.lift
@@ -213,6 +274,11 @@ func compose(_ look: Look, overlays: [Overlay], underlays: [Overlay] = []) -> Gr
     case .wink:
         eyeRows([er, er + 1, er + 2], cols: left)
         eyeRows([er + 2], cols: right)
+    case .angry:
+        // Narrowed eyes under brows that slant down toward the middle.
+        eyeRows([er + 1, er + 2], cols: left + right)
+        put(er - 2, 3, "k"); put(er - 1, 4, "k"); put(er, 5, "k")
+        put(er - 2, 12, "k"); put(er - 1, 11, "k"); put(er, 10, "k")
     }
 
     // Mouth
@@ -240,19 +306,12 @@ func compose(_ look: Look, overlays: [Overlay], underlays: [Overlay] = []) -> Gr
     }
     for c in feet { put(13, c, "d") }
     for c in tips { put(14, c, "d") }
-
-    if look.sick {
-        let tint: [Character: Character] = ["o": "q", "d": "v", "l": "j"]
-        for y in 0..<canvasH { for x in 0..<canvasW { if let t = tint[g[y][x]] { g[y][x] = t } } }
-    }
-
-    for o in overlays { stamp(o) }
-    return g
 }
 
 enum Activity: String, CaseIterable {
     case idle, sleep, walk, code, ponder, eat, play, coffee, dance
     case chase, alert, ask, sick, fainted, sad, petted, thinking, carried
+    case tossed, splat, grumpy
 
     var label: String {
         switch self {
@@ -274,13 +333,16 @@ enum Activity: String, CaseIterable {
         case .petted: return "Being petted"
         case .thinking: return "Compacting"
         case .carried: return "Picked up"
+        case .tossed: return "Thrown across the screen"
+        case .splat: return "Landed hard"
+        case .grumpy: return "Sulking"
         }
     }
 
     /// Reactions are triggered by Claude, never chosen at random.
     var isReaction: Bool {
         switch self {
-        case .chase, .alert, .ask, .fainted, .sad, .petted, .thinking, .carried: return true
+        case .chase, .alert, .ask, .fainted, .sad, .petted, .thinking, .carried, .tossed, .splat, .grumpy: return true
         default: return false
         }
     }
@@ -305,8 +367,8 @@ struct FrameSpec {
 enum Sprites {
     private static var cache: [String: Animation] = [:]
 
-    static func animation(_ a: Activity, bloated: Bool, sweat: Bool) -> Animation {
-        let key = "\(a.rawValue)-\(bloated)-\(sweat)"
+    static func animation(_ a: Activity, bloated: Bool, sweat: Bool, mirrored: Bool = false) -> Animation {
+        let key = "\(a.rawValue)-\(bloated)-\(sweat)-\(mirrored)"
         if let hit = cache[key] { return hit }
         var specs = frameSpecs(a)
         for i in specs.indices {
@@ -315,7 +377,7 @@ enum Sprites {
                 specs[i].overlays.append(Overlays.sweat(x: 21, y: 12))
             }
         }
-        let anim = Animation(frames: specs.map { compose($0.look, overlays: $0.overlays, underlays: $0.underlays) },
+        let anim = Animation(frames: specs.map { compose($0.look, overlays: $0.overlays, underlays: $0.underlays, mirrored: mirrored) },
                              frameDuration: frameDuration(a))
         cache[key] = anim
         return anim
@@ -342,6 +404,9 @@ enum Sprites {
         case .petted: return 0.35
         case .thinking: return 0.5
         case .carried: return 0.12
+        case .tossed: return 0.07
+        case .splat: return 0.9
+        case .grumpy: return 0.7
         }
     }
 
@@ -439,6 +504,18 @@ enum Sprites {
                     F(Look(legs: .dangleB, mouth: .open, lift: 1)),
                     F(Look(legs: .dangleA, mouth: .open, lift: 2)),
                     F(Look(legs: .dangleB, mouth: .open, lift: 2))]
+        case .tossed:
+            return (0..<4).map { F(Look(hidden: true), [O.curled(step: $0)]) }
+        case .splat:
+            // Flattened, eyes shut, a puff of dust either side.
+            return [F(Look(eyes: .blink, legs: .spread, mouth: .open, squash: 3), [O.dust(x: 1), O.dust(x: 20)])]
+        case .grumpy:
+            return [F(Look(eyes: .angry, mouth: .frown), [O.anger]),
+                    F(Look(eyes: .angry, mouth: .frown)),
+                    F(Look(eyes: .angry, mouth: .frown), [O.anger]),
+                    F(Look(eyes: .sad, mouth: .frown), [O.tear(y: 17)]),
+                    F(Look(eyes: .sad, mouth: .frown), [O.tear(y: 20)]),
+                    F(Look(eyes: .angry, mouth: .frown, squash: 1))]
         }
     }
 }
@@ -507,9 +584,9 @@ enum IconRenderer {
 
 // Debug export: every animation as one row of a sprite sheet PNG, on a chosen background.
 enum SheetRenderer {
-    static func write(to path: String, background: UInt32 = 0xF4F1EC, scale: Int = 6) {
+    static func write(to path: String, background: UInt32 = 0xF4F1EC, scale: Int = 6, mirrored: Bool = false) {
         let acts = Activity.allCases
-        let maxFrames = acts.map { Sprites.animation($0, bloated: false, sweat: false).frames.count }.max() ?? 1
+        let maxFrames = acts.map { Sprites.animation($0, bloated: false, sweat: false, mirrored: mirrored).frames.count }.max() ?? 1
         let cell = canvasW * scale
         let w = maxFrames * cell, h = acts.count * cell
         guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: w, pixelsHigh: h,
@@ -522,7 +599,7 @@ enum SheetRenderer {
         Palette.hex(background).setFill()
         NSRect(x: 0, y: 0, width: w, height: h).fill()
         for (rowIdx, a) in acts.enumerated() {
-            let anim = Sprites.animation(a, bloated: false, sweat: false)
+            let anim = Sprites.animation(a, bloated: false, sweat: false, mirrored: mirrored)
             for (col, frame) in anim.frames.enumerated() {
                 let ox = col * cell
                 let oyTop = rowIdx * cell

@@ -220,9 +220,12 @@ final class PetModel {
         case "PreToolUse", "PostToolUse", "PostToolBatch", "SubagentStart", "SubagentStop":
             s.working = true
             nibbles += 1
+            // Tools are running again, so any permission prompt has been answered.
+            if s.attention == .permission { s.attention = nil; s.attentionSince = nil }
         case "Stop", "StopFailure":
             s.working = false
-            if s.attention == nil {
+            if s.attention == nil || s.attention == .permission {
+                s.attention = nil
                 newAttention = .finished
                 Prefs.totalFinished += 1
             }
@@ -230,6 +233,7 @@ final class PetModel {
             let type = (event["notification_type"] as? String)
                 ?? (event["matcher"] as? String) ?? ""
             let message = (event["message"] as? String ?? "").lowercased()
+            Diag.log("Notification \(type.isEmpty ? "(no type)" : type) for \(s.name): \(message.prefix(80))")
             if type == "permission_prompt" || type == "agent_needs_input" || message.contains("permission") {
                 s.working = false
                 if s.attention != .permission { newAttention = .permission }
@@ -238,6 +242,7 @@ final class PetModel {
                 newAttention = .idle
             }
         case "PermissionRequest":
+            Diag.log("PermissionRequest for \(s.name): \(event["tool_name"] as? String ?? "?")")
             s.working = false
             if s.attention != .permission { newAttention = .permission }
         case "PreCompact":
@@ -256,7 +261,7 @@ final class PetModel {
             break
         }
         var seenAlready = false
-        if newAttention != nil, userIsLooking(at: s) {
+        if let a = newAttention, userIsLooking(at: s, for: a) {
             // You are looking right at it: nothing to announce.
             newAttention = nil
             seenAlready = true
@@ -310,7 +315,7 @@ final class PetModel {
                 switch snap.lastKind {
                 case .assistantDone:
                     s.working = false
-                    if wasWorking, !isNew, s.attention == nil, !userIsLooking(at: s) {
+                    if wasWorking, !isNew, s.attention == nil, !userIsLooking(at: s, for: .finished) {
                         s.attention = .finished
                         s.attentionSince = now
                         Prefs.totalFinished += 1
@@ -333,10 +338,10 @@ final class PetModel {
     }
 
     /// True when the user is already looking at this session's window.
-    private func userIsLooking(at s: Session) -> Bool {
+    private func userIsLooking(at s: Session, for a: Attention) -> Bool {
         guard Prefs.skipFrontWindow else { return false }
         let looking = WindowRaiser.frontWindowShows(cwd: s.cwd)
-        Diag.log("\(s.name) wants attention; user already looking at it: \(looking)")
+        Diag.log("\(s.name) \(a.label); user already looking at it: \(looking)")
         return looking
     }
 
@@ -399,6 +404,12 @@ final class PetModel {
     func pet() {
         happiness += 12
         Prefs.totalPets += 1
+        onChange?()
+    }
+
+    func thrown() {
+        happiness -= 15
+        log("Thrown across the screen")
         onChange?()
     }
 

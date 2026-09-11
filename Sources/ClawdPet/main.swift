@@ -48,6 +48,8 @@ if let path = flagValue("--render-sheet") {
         SheetRenderer.write(to: base + suffix + ".png", background: bg)
         print("wrote \(base + suffix + ".png")")
     }
+    SheetRenderer.write(to: base + "-mirrored.png", background: 0xFFFFFF, mirrored: true)
+    print("wrote \(base + "-mirrored.png") (facing left)")
     exit(0)
 }
 if let dir = flagValue("--render-icon") {

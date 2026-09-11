@@ -8,8 +8,10 @@ final class HookServer {
     let port: UInt16
     var onHook: (([String: Any]) -> Void)?
     var onStatus: (([String: Any]) -> Void)?
-    /// Debug aid: POST /raise {"cwd": "..."} behaves like clicking the pet for that project.
+    /// Debug aids: POST /raise {"cwd": "..."} behaves like clicking the pet for that project;
+    /// POST /toss {"vx": px/s, "vy": px/s} throws it.
     var onRaise: (([String: Any]) -> Void)?
+    var onToss: (([String: Any]) -> Void)?
     private(set) var lastError: String?
 
     init(port: UInt16) throws {
@@ -80,6 +82,7 @@ final class HookServer {
                 DispatchQueue.main.async { [weak self] in
                     if path.hasPrefix("/status") { self?.onStatus?(json) }
                     else if path.hasPrefix("/raise") { self?.onRaise?(json) }
+                    else if path.hasPrefix("/toss") { self?.onToss?(json) }
                     else { self?.onHook?(json) }
                 }
             } else {

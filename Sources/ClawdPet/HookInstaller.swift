@@ -13,10 +13,14 @@ enum HookInstaller {
     static let statusCommand = "~/.claude/clawd-pet/statusline.sh"
     static let marker = "clawd-pet/"
 
-    static let events: [(name: String, matcher: String?)] = [
-        ("SessionStart", nil), ("UserPromptSubmit", nil), ("PostToolUse", nil), ("Stop", nil),
-        ("Notification", "permission_prompt|idle_prompt"), ("PreCompact", nil), ("PostCompact", nil),
-        ("SessionEnd", nil)
+    /// PermissionRequest is the one synchronous hook: it fires the instant Claude is
+    /// about to ask, and a hook that prints nothing leaves the normal dialog alone.
+    /// The Notification permission_prompt only arrives once the prompt has sat a while.
+    static let events: [(name: String, matcher: String?, async: Bool)] = [
+        ("SessionStart", nil, true), ("UserPromptSubmit", nil, true), ("PostToolUse", nil, true),
+        ("Stop", nil, true), ("Notification", "permission_prompt|idle_prompt", true),
+        ("PermissionRequest", nil, false), ("PreCompact", nil, true), ("PostCompact", nil, true),
+        ("SessionEnd", nil, true)
     ]
 
     static let hookScript = """
@@ -71,9 +75,9 @@ enum HookInstaller {
         for e in events {
             var groups = hooks[e.name] as? [[String: Any]] ?? []
             groups.removeAll { groupIsOurs($0) }
-            var group: [String: Any] = [
-                "hooks": [["type": "command", "command": hookCommand, "async": true]]
-            ]
+            var hook: [String: Any] = ["type": "command", "command": hookCommand]
+            if e.async { hook["async"] = true }
+            var group: [String: Any] = ["hooks": [hook]]
             if let m = e.matcher { group["matcher"] = m }
             groups.append(group)
             hooks[e.name] = groups

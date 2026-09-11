@@ -27,7 +27,6 @@ final class PetPanel: NSPanel {
 final class PetView: NSView {
     var grid: Grid = [] { didSet { needsDisplay = true } }
     var decorations: [Overlay] = [] { didSet { needsDisplay = true } }
-    var mirrored = false { didSet { if oldValue != mirrored { needsDisplay = true } } }
     let scale: CGFloat
     weak var controller: PetController?
 
@@ -50,7 +49,6 @@ final class PetView: NSView {
                 }
             }
         }
-        if mirrored { g = g.map { Array($0.reversed()) } }
         for (y, row) in g.enumerated() {
             for (x, ch) in row.enumerated() {
                 guard let color = Palette.colors[ch] else { continue }
@@ -65,7 +63,7 @@ final class PetView: NSView {
         let p = convert(point, from: superview)
         let x = Int(p.x / scale), y = Int(p.y / scale)
         guard y >= 0, y < grid.count, x >= 0, x < canvasW else { return nil }
-        let col = mirrored ? canvasW - 1 - x : x
+        let col = x
         if grid[y][col] != "." { return self }
         for o in decorations {
             let dy = y - o.y, dx = col - o.x
@@ -129,6 +127,11 @@ final class PetController {
     private var chaseParked = false
     private var wasAlerting = false
     private var goingHome = false
+    private var lastFacing = false
+    private var tossVel: CGPoint?            // set while flying after a toss
+    private var splatUntil = Date.distantPast
+    private var sulkUntil = Date.distantPast
+    private var dragSamples: [(t: Date, p: CGPoint)] = []
     var forcedActivity: Activity?
     var forcedUntil = Date.distantPast
     var demoMode = false
@@ -204,7 +207,7 @@ final class PetController {
 
     private func step() {
         let now = Date()
-        if dragStart == nil {
+        if dragStart == nil, tossVel == nil {
             let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? ""
             let editorFront = PetController.editorBundleIDs.contains(front)
             if editorFront {
@@ -233,8 +236,16 @@ final class PetController {
             if !panel.isVisible { panel.orderFrontRegardless() }
         }
 
-        var (chosen, target) = chooseActivity(now)
-        if dragStart != nil { target = nil }
+        var chosen: Activity
+        var target: CGPoint?
+        if tossVel != nil {
+            fly(now)
+            chosen = tossVel == nil ? .splat : .tossed
+            target = nil
+        } else {
+            (chosen, target) = chooseActivity(now)
+            if dragStart != nil { target = nil }
+        }
 
         if let t = target {
             let dx = t.x - pos.x, dy = t.y - pos.y
@@ -255,13 +266,13 @@ final class PetController {
         if panel.frame.origin != pos { panel.setFrameOrigin(pos) }
 
         activity = chosen
-        let anim = Sprites.animation(activity, bloated: model.isBloated, sweat: model.weeklyHigh)
+        let anim = Sprites.animation(activity, bloated: model.isBloated, sweat: model.weeklyHigh, mirrored: facingLeft)
         let idx = Int(now.timeIntervalSince(animStart) / anim.frameDuration) % anim.frames.count
-        if idx != lastFrameIndex {
+        if idx != lastFrameIndex || facingLeft != lastFacing {
             lastFrameIndex = idx
+            lastFacing = facingLeft
             view.grid = anim.frames[idx]
         }
-        view.mirrored = facingLeft
         let deco: [Overlay] = model.mess ? [Overlays.mess] : []
         if deco.count != view.decorations.count { view.decorations = deco }
     }
@@ -304,6 +315,8 @@ final class PetController {
             goingHome = true
         }
         if now < pettedUntil { return (.petted, nil) }
+        if now < splatUntil { return (.splat, nil) }
+        if now < sulkUntil { return (.grumpy, nil) }
         if goingHome {
             if hypot(home.x - pos.x, home.y - pos.y) > 3 { return (.walk, home) }
             goingHome = false
@@ -370,6 +383,66 @@ final class PetController {
                        y: min(max(p.y, vf.minY), vf.maxY - size))
     }
 
+    // MARK: Toss
+
+    /// Cursor speed over the last stretch of the drag, or nil if the hand was still.
+    private func releaseVelocity() -> CGPoint? {
+        guard let last = dragSamples.last, Date().timeIntervalSince(last.t) < 0.1 else { return nil }
+        let ref = dragSamples.last(where: { last.t.timeIntervalSince($0.t) >= 0.06 }) ?? dragSamples.first!
+        let dt = CGFloat(last.t.timeIntervalSince(ref.t))
+        guard dt > 0.01, dt < 0.4 else { return nil }
+        return CGPoint(x: (last.p.x - ref.p.x) / dt, y: (last.p.y - ref.p.y) / dt)
+    }
+
+    /// Lets go with a flick: he curls up, spins, and flies with a bit of gravity.
+    func toss(_ v: CGPoint) {
+        let speed = hypot(v.x, v.y)
+        let k = min(speed, 2800) / max(speed, 1)
+        tossVel = CGPoint(x: v.x * k, y: v.y * k)
+        facingLeft = v.x < 0
+        chaseParked = false
+        goingHome = false
+        splatUntil = .distantPast
+        sulkUntil = .distantPast
+        model.thrown()
+    }
+
+    /// One frame of flight. Bounces off the edges, and on a hard enough floor hit
+    /// bounces once more; otherwise he lands with a thud and sulks where he fell.
+    private func fly(_ now: Date) {
+        guard var v = tossVel else { return }
+        let dt: CGFloat = 1.0 / 30.0
+        v.y -= 3200 * dt
+        pos.x += v.x * dt
+        pos.y += v.y * dt
+        let vf = visibleFrame(around: CGPoint(x: pos.x + size / 2, y: pos.y + size / 2))
+        if pos.x < vf.minX { pos.x = vf.minX; v.x = -v.x * 0.55 }
+        if pos.x > vf.maxX - size { pos.x = vf.maxX - size; v.x = -v.x * 0.55 }
+        if pos.y > vf.maxY - size { pos.y = vf.maxY - size; v.y = -abs(v.y) * 0.4 }
+        if pos.y <= vf.minY {
+            pos.y = vf.minY
+            if v.y < -350 {
+                v.y = -v.y * 0.42
+                v.x *= 0.7
+            } else {
+                tossVel = nil
+                splatUntil = now.addingTimeInterval(0.9)
+                sulkUntil = now.addingTimeInterval(30)
+                home = pos
+                Prefs.home = home
+                return
+            }
+        }
+        if abs(v.x) < 4 { v.x = 0 }
+        facingLeft = v.x < 0 || (v.x == 0 && facingLeft)
+        tossVel = v
+    }
+
+    private func visibleFrame(around p: CGPoint) -> NSRect {
+        let screen = NSScreen.screens.first { NSPointInRect(p, $0.frame) } ?? NSScreen.main
+        return screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+    }
+
     private func tooltip() -> String {
         var lines = ["Clawd: \(model.moodLine)"]
         lines.append("Doing: \(activity.label)")
@@ -389,12 +462,16 @@ final class PetController {
         dragStart = m
         dragOffset = CGPoint(x: m.x - pos.x, y: m.y - pos.y)
         dragged = false
+        dragSamples = [(Date(), m)]
+        tossVel = nil   // caught mid-air
     }
 
     func mouseDragged(_ event: NSEvent) {
         guard let start = dragStart else { return }
         let m = NSEvent.mouseLocation
         if hypot(m.x - start.x, m.y - start.y) > 4 { dragged = true }
+        dragSamples.append((Date(), m))
+        if dragSamples.count > 10 { dragSamples.removeFirst() }
         if dragged {
             pos = clamp(CGPoint(x: m.x - dragOffset.x, y: m.y - dragOffset.y))
             panel.setFrameOrigin(pos)
@@ -404,10 +481,14 @@ final class PetController {
     func mouseUp(_ event: NSEvent) {
         defer { dragStart = nil }
         if dragged {
-            home = pos
-            Prefs.home = home
             wanderTarget = nil
             goingHome = false
+            if let v = releaseVelocity(), hypot(v.x, v.y) > 900 {
+                toss(v)
+            } else {
+                home = pos
+                Prefs.home = home
+            }
             return
         }
         clicked()
@@ -427,6 +508,7 @@ final class PetController {
             return
         }
         model.pet()
+        sulkUntil = .distantPast   // a pat is an apology accepted
         pettedUntil = Date().addingTimeInterval(2.4)
     }
 

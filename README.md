@@ -21,7 +21,9 @@ window, he keeps quiet. Once you have clicked him, he takes you back to the wind
 running in, then trots home to his spot and gets on with his day.
 
 He is not without feelings. His happiness sinks while finished sessions sit unanswered, and he is
-delighted when you pet him. A nearly full context window leaves him bloated and sweaty. Hit the
+delighted when you pet him. Pick him up and he dangles nervously; fling him and he curls into a
+ball, spins across the screen, bounces off the edges, and lands with a thud, then sits where he
+fell and sulks for half a minute, glaring and sniffling. A pat is an apology accepted. A nearly full context window leaves him bloated and sweaty. Hit the
 5-hour usage limit and he faints, X-eyed, until it resets. And after a compaction he leaves a small
 pile behind that he really would like you to clean up.
 
@@ -31,7 +33,7 @@ pile behind that he really would like you to clean up.
 |---|---|
 | `UserPromptSubmit`, tool use | Busy. Long stretches of typing on his laptop (2 to 5 min), thinking in a grey thought bubble (1 to 2.5 min), ambling left and right (1 to 3 min), or sitting and breathing, broken up by short treats: a cookie, a coffee, a ball, a dance (10 to 30 s) |
 | `Stop` (Claude finished a turn) | Runs to your cursor with a red `!` and hops until you click him, then trots home |
-| `Notification` permission_prompt / idle_prompt | Same, with a yellow `?` |
+| `PermissionRequest`, `Notification` permission_prompt / idle_prompt | Same, with a yellow `?`. He calms down on his own once you answer the prompt and tools start running again |
 | Session finishes in the window you are looking at | Nothing. He assumes you saw it (needs Accessibility, see below) |
 | Context window over 80% | Bloated body and sweat drop. Time for `/compact` |
 | `PreCompact` / `PostCompact` | Thinks, then leaves a little pile you click to clean up |
@@ -42,6 +44,7 @@ pile behind that he really would like you to clean up.
 | Happiness under 25 | Sad and teary |
 | You click him when nothing is waiting | Petted and beaming |
 | You drag him | Picked up: wide eyes, legs dangling and wiggling until you set him down. Where you drop him is his new home spot |
+| You fling him | Curls into a ball, spins through the air, bounces off the screen edges, lands hard, then sulks where he fell for 30 s. Happiness takes a hit; a pat ends the sulk |
 
 When he chases your cursor he parks as soon as he gets close and stays put while your cursor is
 nearby, so he is easy to click. He only sets off again if you move more than about 260 px away.

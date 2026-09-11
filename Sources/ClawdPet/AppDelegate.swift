@@ -22,6 +22,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let s = try HookServer(port: Prefs.port)
             s.onHook = { PetModel.shared.handle(event: $0) }
             s.onStatus = { PetModel.shared.handle(status: $0) }
+            s.onToss = { [weak self] json in
+                let vx = (json["vx"] as? Double) ?? 1500, vy = (json["vy"] as? Double) ?? 900
+                self?.controller.toss(CGPoint(x: vx, y: vy))
+            }
             s.onRaise = { json in
                 guard let cwd = json["cwd"] as? String else { return }
                 let outcome = PetController.openInEditor(cwd: cwd)
