@@ -81,6 +81,9 @@ the project name and brings that one forward, even if it is minimised or on anot
 permission lets him read the title of the window in front, which is how he knows to stay quiet when
 you are already looking at the session that just finished.
 
+Only ClawdPet needs to be ticked in that list. The permission belongs to the app doing the looking
+and raising, not to the app being raised, so VS Code, Cursor, and your terminal need nothing.
+
 The build signs the app so that macOS recognises it by its bundle identifier rather than by the
 hash of one particular build, which keeps the Accessibility grant across rebuilds. If raising ever
 stops working after a rebuild, untick and re-tick ClawdPet in the Accessibility list. The Recent
