@@ -24,9 +24,9 @@ He is not without feelings. His happiness sinks while finished sessions sit unan
 delighted when you pet him. Pick him up and he dangles nervously; fling him and he curls into a
 ball, spins across the screen, bounces off the edges, and lands with a thud, then sits where he
 fell and sulks for half a minute, glaring and sniffling. A pat is an apology accepted. A nearly full context window leaves him bloated and sweaty. As the
-5-hour usage limit creeps up he goes downhill in stages: queasy and sweating at half, washed out and
-frowning at three quarters, green and trembling past ninety percent, and when it is hit he faints,
-X-eyed, until it resets. Burn through the whole weekly limit and it is worse than that: all that is
+5-hour usage limit creeps up he goes downhill in stages: washed out, sweating and frowning at three
+quarters, green and trembling past ninety percent, and when it is hit he faints, X-eyed, until it
+resets. Burn through the whole weekly limit and it is worse than that: all that is
 left is a little headstone with a ghost hovering over it. When the week resets he pops back up in a
 shower of sparkles, brand new, with his age counter starting again from zero. And after a compaction he leaves a small
 pile behind that he really would like you to clean up.
@@ -41,8 +41,7 @@ pile behind that he really would like you to clean up.
 | Session finishes in the window you are looking at | Nothing. He assumes you saw it (needs Accessibility, see below) |
 | Context window over 80% | Bloated body and sweat drop. Time for `/compact` |
 | `PreCompact` / `PostCompact` | Thinks, then leaves a little pile you click to clean up |
-| 5-hour limit at 50%+ | Queasy: droopy eyes and a sweat drop, in every animation |
-| 5-hour limit at 75%+ | Sick: fades to a washed-out orange with a frown |
+| 5-hour limit at 75%+ | Sick: fades to a washed-out orange with a sweat drop, in every animation |
 | 5-hour limit at 90%+ | Very sick: turns green and trembles, sweating on both sides |
 | 5-hour limit hit | Faints, X eyes, until the window resets |
 | Weekly limit over 85% | Permanent sweat drop |

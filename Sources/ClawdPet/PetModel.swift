@@ -181,15 +181,14 @@ final class PetModel {
         if let r = f.resetsAt { return Date() < r }
         return true
     }
-    /// 5-hour limit stages: 0 fine, 1 queasy (50%+), 2 sick (75%+), 3 very sick (90%+).
+    /// 5-hour limit stages: 0 fine, 1 sick (75%+), 2 very sick (90%+).
     var sickness: Int {
         guard !isFainted, let f = fiveHour else { return 0 }
-        if f.used >= 90 { return 3 }
-        if f.used >= 75 { return 2 }
-        if f.used >= 50 { return 1 }
+        if f.used >= 90 { return 2 }
+        if f.used >= 75 { return 1 }
         return 0
     }
-    var isTired: Bool { sickness >= 2 }
+    var isTired: Bool { sickness >= 1 }
     /// Weekly limit hit: a gravestone until it resets, then he is reborn.
     var isDead: Bool {
         guard let w = sevenDay, w.used >= 100 else { return false }
@@ -212,9 +211,8 @@ final class PetModel {
         if !workingSessions.isEmpty { return "Busy with \(workingSessions.count) session\(workingSessions.count == 1 ? "" : "s")" }
         if isSad { return "Sad and neglected" }
         switch sickness {
-        case 3: return "Very sick: 5-hour limit at \(Int(fiveHour?.used ?? 0))%"
-        case 2: return "Sick: 5-hour limit at \(Int(fiveHour?.used ?? 0))%"
-        case 1: return "Queasy: 5-hour limit at \(Int(fiveHour?.used ?? 0))%"
+        case 2: return "Very sick: 5-hour limit at \(Int(fiveHour?.used ?? 0))%"
+        case 1: return "Sick: 5-hour limit at \(Int(fiveHour?.used ?? 0))%"
         default: break
         }
         return sessions.isEmpty ? "No Claude sessions" : "Idle"
@@ -520,10 +518,6 @@ final class PetModel {
         case "tired":
             handle(status: ["session_id": sid, "cwd": cwd,
                             "rate_limits": ["five_hour": ["used_percentage": 82.0,
-                                                          "resets_at": Date().timeIntervalSince1970 + 3600]]])
-        case "queasy":
-            handle(status: ["session_id": sid, "cwd": cwd,
-                            "rate_limits": ["five_hour": ["used_percentage": 58.0,
                                                           "resets_at": Date().timeIntervalSince1970 + 3600]]])
         case "verysick":
             handle(status: ["session_id": sid, "cwd": cwd,

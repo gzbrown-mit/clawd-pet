@@ -341,13 +341,9 @@ final class PetController {
         return (.idle, home)
     }
 
-    /// Which of the three unwell looks matches the 5-hour limit right now.
+    /// Which unwell look matches the 5-hour limit right now.
     private var sickActivity: Activity {
-        switch model.sickness {
-        case 3: return .verySick
-        case 2: return .sick
-        default: return .queasy
-        }
+        model.sickness >= 2 ? .verySick : .sick
     }
 
     /// Weighted pick, never the same activity twice in a row.

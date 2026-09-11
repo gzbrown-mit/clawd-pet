@@ -338,7 +338,7 @@ private func drawBody(_ look: Look, into g: inout Grid) {
 enum Activity: String, CaseIterable {
     case idle, sleep, walk, code, ponder, eat, play, coffee, dance
     case chase, alert, ask, sick, fainted, sad, petted, thinking, carried
-    case tossed, splat, grumpy, queasy, verySick, dead, reborn
+    case tossed, splat, grumpy, verySick, dead, reborn
 
     var label: String {
         switch self {
@@ -354,7 +354,6 @@ enum Activity: String, CaseIterable {
         case .chase: return "Chasing the mouse"
         case .alert: return "Claude finished"
         case .ask: return "Claude needs permission"
-        case .queasy: return "Queasy (5-hour limit half used)"
         case .sick: return "Sick (5-hour limit close)"
         case .verySick: return "Very sick (5-hour limit nearly hit)"
         case .fainted: return "Fainted (usage limit hit)"
@@ -399,16 +398,16 @@ struct FrameSpec {
 enum Sprites {
     private static var cache: [String: Animation] = [:]
 
-    /// `sickness` is the 5-hour-limit stage (0 fine, 1 queasy, 2 sick, 3 very sick) and
-    /// colours every animation, so he looks unwell even while busy.
+    /// `sickness` is the 5-hour-limit stage (0 fine, 1 sick, 2 very sick) and colours
+    /// every animation, so he looks unwell even while busy.
     static func animation(_ a: Activity, bloated: Bool, sweat: Bool, mirrored: Bool = false, sickness: Int = 0) -> Animation {
         let key = "\(a.rawValue)-\(bloated)-\(sweat)-\(mirrored)-\(sickness)"
         if let hit = cache[key] { return hit }
         var specs = frameSpecs(a)
         for i in specs.indices {
             if bloated { specs[i].look.bloated = true }
-            if sickness >= 2 { specs[i].look.sick = true }
-            if sickness >= 3 { specs[i].look.green = true }
+            if sickness >= 1 { specs[i].look.sick = true }
+            if sickness >= 2 { specs[i].look.green = true }
             if sweat || bloated || sickness >= 1, !specs[i].overlays.contains(where: { $0.id == "sweat" }) {
                 specs[i].overlays.append(Overlays.sweat(x: 21, y: 12))
             }
@@ -434,7 +433,6 @@ enum Sprites {
         case .chase: return 0.16
         case .alert: return 0.28
         case .ask: return 0.32
-        case .queasy: return 1.0
         case .sick: return 1.0
         case .verySick: return 0.22
         case .dead: return 0.6
@@ -518,12 +516,6 @@ enum Sprites {
                     F(Look(legs: .tuck, lift: 1), [O.query(y: 0)]),
                     F(Look(), [O.query()]),
                     F(Look(eyes: .droopy), [O.query()])]
-        case .queasy:
-            // Off colour: droopy, a little sweat, sitting low.
-            return [F(Look(eyes: .droopy, mouth: .small), [O.sweat()]),
-                    F(Look(eyes: .droopy, mouth: .small, squash: 1), [O.sweat(y: 13)]),
-                    F(Look(eyes: .blink, mouth: .small, squash: 1), [O.sweat(y: 13)]),
-                    F(Look(eyes: .droopy, mouth: .small), [O.sweat(x: 2, y: 12)])]
         case .verySick:
             // Green and trembling, sweating on both sides.
             return [F(Look(eyes: .droopy, mouth: .frown, green: true), [O.sweat(), O.sweat(x: 2, y: 12)]),
