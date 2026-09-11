@@ -180,6 +180,12 @@ Pacing lives in `PetController.routine`: each entry has a weight and a duration 
 run for minutes, treats for seconds, and the same action never repeats twice in a row. Per-frame
 speed is in `Sprites.frameDuration`.
 
+## Porting to Windows
+
+The pet's logic (sprites, model, transcript parsing) is platform-neutral; the floating panel, window
+raising, tray icon, hooks, and paths are not. [PORTING-WINDOWS.md](PORTING-WINDOWS.md) lists every
+macOS-specific piece, its Windows equivalent, and the traps to expect, in the order to tackle them.
+
 ## Layout
 
 ```
