@@ -2,6 +2,7 @@
 # Fakes a Claude Code session so you can watch the pet react without running Claude.
 #   scripts/simulate.sh          full session: start, work, compact, finish
 #   scripts/simulate.sh limit    hit the 5-hour usage limit (faints for 2 minutes)
+#   scripts/simulate.sh weekly   hit the weekly limit (gravestone for 90 s, then reborn)
 #   scripts/simulate.sh reset    clear the fake session
 PORT="${CLAWD_PET_PORT:-4242}"
 SID="sim-$$"
@@ -15,6 +16,9 @@ case "${1:-}" in
   limit)
     post status "{\"session_id\":\"$SID\",\"cwd\":\"$CWD\",\"rate_limits\":{\"five_hour\":{\"used_percentage\":100,\"resets_at\":$((NOW+120))},\"seven_day\":{\"used_percentage\":90,\"resets_at\":$((NOW+86400))}}}"
     echo "5-hour limit hit. Clawd faints until it 'resets' in 2 minutes."; exit 0;;
+  weekly)
+    post status "{\"session_id\":\"$SID\",\"cwd\":\"$CWD\",\"rate_limits\":{\"seven_day\":{\"used_percentage\":100,\"resets_at\":$((NOW+90))}}}"
+    echo "Weekly limit hit. RIP for 90 seconds, then he is reborn and his age resets."; exit 0;;
   reset)
     post status "{\"session_id\":\"$SID\",\"cwd\":\"$CWD\",\"rate_limits\":{\"five_hour\":{\"used_percentage\":0},\"seven_day\":{\"used_percentage\":0}}}"
     ev SessionEnd; echo "cleared"; exit 0;;

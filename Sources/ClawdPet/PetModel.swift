@@ -80,6 +80,7 @@ enum Prefs {
         d.set(now, forKey: "birth")
         return now
     }
+    static func resetBirth() { d.set(Date(), forKey: "birth") }
     static var totalPets: Int {
         get { d.integer(forKey: "totalPets") }
         set { d.set(newValue, forKey: "totalPets") }
@@ -153,8 +154,11 @@ final class PetModel {
     var thinkingUntil = Date.distantPast
     var nibbles = 0
     private(set) var recentEvents: [String] = []
+    private var wasDead = false
+    private var loggedStatus = false
     var onChange: (() -> Void)?
     var onAttention: ((Session) -> Void)?
+    var onReborn: (() -> Void)?
 
     private let timeFmt: DateFormatter = {
         let f = DateFormatter()
@@ -177,14 +181,29 @@ final class PetModel {
         if let r = f.resetsAt { return Date() < r }
         return true
     }
-    var isTired: Bool { (fiveHour?.used ?? 0) >= 75 && !isFainted }
+    /// 5-hour limit stages: 0 fine, 1 queasy (50%+), 2 sick (75%+), 3 very sick (90%+).
+    var sickness: Int {
+        guard !isFainted, let f = fiveHour else { return 0 }
+        if f.used >= 90 { return 3 }
+        if f.used >= 75 { return 2 }
+        if f.used >= 50 { return 1 }
+        return 0
+    }
+    var isTired: Bool { sickness >= 2 }
+    /// Weekly limit hit: a gravestone until it resets, then he is reborn.
+    var isDead: Bool {
+        guard let w = sevenDay, w.used >= 100 else { return false }
+        if let r = w.resetsAt { return Date() < r }
+        return true
+    }
     var weeklyHigh: Bool { (sevenDay?.used ?? 0) >= 85 }
     var isBloated: Bool { workingSessions.contains { ($0.contextUsed ?? 0) >= 80 } }
     var isSad: Bool { happiness < 25 }
     var ageDays: Int { Int(Date().timeIntervalSince(Prefs.birth) / 86400) }
 
     var moodLine: String {
-        if isFainted { return "Fainted: usage limit hit" }
+        if isDead { return "RIP: weekly limit hit, " + (sevenDay?.resetsAt.map { "reborn when it " + formatCountdown(to: $0) } ?? "waiting for the reset") }
+        if isFainted { return "Fainted: 5-hour limit hit" }
         if let s = attentionSessions.first {
             let extra = attentionSessions.count > 1 ? " (+\(attentionSessions.count - 1) more)" : ""
             return "\(s.name) \(s.attention!.label)\(extra)"
@@ -192,7 +211,12 @@ final class PetModel {
         if isBloated { return "Bloated: context nearly full, try /compact" }
         if !workingSessions.isEmpty { return "Busy with \(workingSessions.count) session\(workingSessions.count == 1 ? "" : "s")" }
         if isSad { return "Sad and neglected" }
-        if isTired { return "Tired: usage limit close" }
+        switch sickness {
+        case 3: return "Very sick: 5-hour limit at \(Int(fiveHour?.used ?? 0))%"
+        case 2: return "Sick: 5-hour limit at \(Int(fiveHour?.used ?? 0))%"
+        case 1: return "Queasy: 5-hour limit at \(Int(fiveHour?.used ?? 0))%"
+        default: break
+        }
         return sessions.isEmpty ? "No Claude sessions" : "Idle"
     }
 
@@ -290,6 +314,10 @@ final class PetModel {
         if let rl = status["rate_limits"] as? [String: Any] {
             fiveHour = parseLimit(rl["five_hour"]) ?? fiveHour
             sevenDay = parseLimit(rl["seven_day"]) ?? sevenDay
+        }
+        if !loggedStatus {
+            loggedStatus = true
+            Diag.log("first status line: keys \(status.keys.sorted().joined(separator: ",")); rate_limits: \(status["rate_limits"].map { "\($0)" } ?? "absent")")
         }
         sessions[sid] = s
         onChange?()
@@ -450,6 +478,25 @@ final class PetModel {
             fiveHour = RateLimit(used: 0, resetsAt: nil)
             changed = true
         }
+        if let w = sevenDay, w.used >= 100, let r = w.resetsAt, now > r {
+            sevenDay = RateLimit(used: 0, resetsAt: nil)
+            changed = true
+        }
+        let dead = isDead
+        if dead && !wasDead {
+            wasDead = true
+            log("Weekly limit hit. RIP")
+            Diag.log("Weekly limit hit: RIP until \(sevenDay?.resetsAt.map { "\($0)" } ?? "a lower reading arrives")")
+            changed = true
+        } else if !dead && wasDead {
+            wasDead = false
+            Prefs.resetBirth()
+            happiness = 70
+            log("Reborn: the weekly limit reset. Age starts over")
+            Diag.log("Reborn: weekly limit reset, age reset to 0")
+            onReborn?()
+            changed = true
+        }
         if changed { onChange?() }
     }
 
@@ -474,6 +521,19 @@ final class PetModel {
             handle(status: ["session_id": sid, "cwd": cwd,
                             "rate_limits": ["five_hour": ["used_percentage": 82.0,
                                                           "resets_at": Date().timeIntervalSince1970 + 3600]]])
+        case "queasy":
+            handle(status: ["session_id": sid, "cwd": cwd,
+                            "rate_limits": ["five_hour": ["used_percentage": 58.0,
+                                                          "resets_at": Date().timeIntervalSince1970 + 3600]]])
+        case "verysick":
+            handle(status: ["session_id": sid, "cwd": cwd,
+                            "rate_limits": ["five_hour": ["used_percentage": 93.0,
+                                                          "resets_at": Date().timeIntervalSince1970 + 3600]]])
+        case "weekly":
+            // Dead for 90 s, then reborn for real (age resets).
+            handle(status: ["session_id": sid, "cwd": cwd,
+                            "rate_limits": ["seven_day": ["used_percentage": 100.0,
+                                                          "resets_at": Date().timeIntervalSince1970 + 90]]])
         case "bloated":
             ev("SessionStart"); ev("UserPromptSubmit")
             handle(status: ["session_id": sid, "cwd": cwd, "context_window": ["used_percentage": 88.0]])
@@ -481,6 +541,7 @@ final class PetModel {
             sessions.removeValue(forKey: sid)
             fiveHour = nil
             sevenDay = nil
+            wasDead = false   // a pretend death cleared this way is not a rebirth
             mess = false
             onChange?()
         default: break

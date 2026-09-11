@@ -131,6 +131,7 @@ final class PetController {
     private var tossVel: CGPoint?            // set while flying after a toss
     private var splatUntil = Date.distantPast
     private var sulkUntil = Date.distantPast
+    private var rebornUntil = Date.distantPast
     private var dragSamples: [(t: Date, p: CGPoint)] = []
     var forcedActivity: Activity?
     var forcedUntil = Date.distantPast
@@ -160,6 +161,7 @@ final class PetController {
         view.controller = self
         view.grid = Sprites.animation(.idle, bloated: false, sweat: false).frames[0]
         model.onAttention = { [weak self] s in self?.attentionArrived(s) }
+        model.onReborn = { [weak self] in self?.rebornUntil = Date().addingTimeInterval(4) }
     }
 
     static func defaultHome(size: CGFloat) -> CGPoint {
@@ -266,7 +268,8 @@ final class PetController {
         if panel.frame.origin != pos { panel.setFrameOrigin(pos) }
 
         activity = chosen
-        let anim = Sprites.animation(activity, bloated: model.isBloated, sweat: model.weeklyHigh, mirrored: facingLeft)
+        let anim = Sprites.animation(activity, bloated: model.isBloated, sweat: model.weeklyHigh,
+                                     mirrored: facingLeft, sickness: model.sickness)
         let idx = Int(now.timeIntervalSince(animStart) / anim.frameDuration) % anim.frames.count
         if idx != lastFrameIndex || facingLeft != lastFacing {
             lastFrameIndex = idx
@@ -288,6 +291,7 @@ final class PetController {
             return (PetController.demoCast[demoIndex], home)
         }
         if let f = forcedActivity, now < forcedUntil { return (f, nil) }
+        if model.isDead { return (.dead, home) }
         if model.isFainted { return (.fainted, home) }
         if let s = model.attentionSessions.first {
             // Chase the cursor, then park once close so it is easy to click. It only
@@ -315,6 +319,7 @@ final class PetController {
             goingHome = true
         }
         if now < pettedUntil { return (.petted, nil) }
+        if now < rebornUntil { return (.reborn, nil) }
         if now < splatUntil { return (.splat, nil) }
         if now < sulkUntil { return (.grumpy, nil) }
         if goingHome {
@@ -326,14 +331,23 @@ final class PetController {
         if !model.workingSessions.isEmpty {
             if now > subActivityUntil { pickRoutine(now) }
             if subActivity == .walk { return wander(now) }
-            if subActivity == .idle && model.isTired { return (.sick, nil) }
+            if subActivity == .idle && model.sickness > 0 { return (sickActivity, nil) }
             return (subActivity, nil)
         }
 
         if model.isSad { return (.sad, home) }
-        if model.isTired { return (.sick, home) }
+        if model.sickness > 0 { return (sickActivity, home) }
         if now.timeIntervalSince(model.lastActivityAt) > 90 { return (.sleep, home) }
         return (.idle, home)
+    }
+
+    /// Which of the three unwell looks matches the 5-hour limit right now.
+    private var sickActivity: Activity {
+        switch model.sickness {
+        case 3: return .verySick
+        case 2: return .sick
+        default: return .queasy
+        }
     }
 
     /// Weighted pick, never the same activity twice in a row.

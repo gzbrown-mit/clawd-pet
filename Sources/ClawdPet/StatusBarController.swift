@@ -142,8 +142,11 @@ final class StatusBarController: NSObject, NSMenuDelegate {
                              ("Pretend Claude needs permission", "permission"),
                              ("Pretend context is nearly full", "bloated"),
                              ("Pretend a compaction happened", "compact"),
-                             ("Pretend the 5-hour limit is close", "tired"),
-                             ("Pretend the 5-hour limit is hit", "limit"),
+                             ("Pretend the 5-hour limit is half used (queasy)", "queasy"),
+                             ("Pretend the 5-hour limit is close (sick)", "tired"),
+                             ("Pretend the 5-hour limit is nearly hit (very sick)", "verysick"),
+                             ("Pretend the 5-hour limit is hit (fainted)", "limit"),
+                             ("Pretend the weekly limit is hit (RIP, reborn in 90 s)", "weekly"),
                              ("Clear pretend state", "reset")] {
             play.addItem(action(title, #selector(simulate(_:)), key))
         }

@@ -37,7 +37,10 @@ enum Palette {
         "u": hex(0x2E4E9E), // dark blue outline
         "q": hex(0xC4917A), // sickly body: washed-out orange
         "v": hex(0x9A6A55), // sickly shade
-        "j": hex(0xDDB3A0)  // sickly highlight
+        "j": hex(0xDDB3A0), // sickly highlight
+        "e": hex(0xA9BF86), // very sick body: green
+        "f": hex(0x74945A), // very sick shade
+        "i": hex(0xD0DEB4)  // very sick highlight
     ]
 }
 
@@ -52,8 +55,9 @@ struct Look {
     var bloated = false
     var squash = 0   // rows flattened off the top of the body
     var lift = 0     // rows lifted off the ground (jumping)
-    var sick = false // green-tinted body
+    var sick = false // washed-out body (5-hour limit at 75%+)
     var hidden = false // no body at all (the curled-up ball is an overlay)
+    var green = false // green body (5-hour limit at 90%+)
 }
 
 struct Overlay {
@@ -131,6 +135,29 @@ enum Overlays {
 
     // Feelings
     static let anger = Overlay(["r.r", ".r.", "r.r"], x: 18, y: 5, id: "anger")
+    static func sparkle(x: Int, y: Int) -> Overlay { Overlay([".y.", "yyy", ".y."], x: x, y: y, id: "sparkle") }
+
+    // The weekly limit: a headstone on a patch of grass, and a little ghost.
+    static let grave = Overlay([
+                              "....kkkkkk....",
+                              "..kkhhhhhhkk..",
+                              ".khhhhhhhhhhk.",
+                              ".khhhhhhhhhhk.",
+                              "khhhhhhhhhhhhk",
+                              "khkkhhkkkhkkhk",
+                              "khkhkhhkhhkhkk",
+                              "khkkhhhkhhkkhk",
+                              "khkhkhhkhhkhhk",
+                              "khkhkhkkkhkhhk",
+                              "khhhhhhhhhhhhk",
+                              "khhhhhhhhhhhhk",
+                              "khhhhhhhhhhhhk",
+                              "kkkkkkkkkkkkkk",
+                              ".g.gg.g..gg.g."
+                              ], x: 5, y: 8, id: "grave")
+    static func ghost(y: Int) -> Overlay {
+        Overlay([".kkk.", "kwwwk", "kwkwk", "kwwwk", "kwwwk", "kwkwk", ".k.k."], x: 17, y: y, id: "ghost")
+    }
     static func dust(x: Int) -> Overlay { Overlay([".h.", "h.h"], x: x, y: 20, id: "dust") }
     static func sweat(x: Int = 20, y: Int = 12) -> Overlay { Overlay([".n", "nn"], x: x, y: y, id: "sweat") }
     static func tear(y: Int) -> Overlay { Overlay([".n", "nn"], x: 8, y: y, id: "tear") }
@@ -204,8 +231,8 @@ func compose(_ look: Look, overlays: [Overlay], underlays: [Overlay] = [], mirro
     var g = blank()
     for o in underlays { stamp(o, into: &g) }
     if !look.hidden { drawBody(look, into: &g) }
-    if look.sick {
-        let tint: [Character: Character] = ["o": "q", "d": "v", "l": "j"]
+    if look.green || look.sick {
+        let tint: [Character: Character] = look.green ? ["o": "e", "d": "f", "l": "i"] : ["o": "q", "d": "v", "l": "j"]
         for y in 0..<canvasH { for x in 0..<canvasW { if let t = tint[g[y][x]] { g[y][x] = t } } }
     }
     if mirrored { g = g.map { Array($0.reversed()) } }
@@ -311,7 +338,7 @@ private func drawBody(_ look: Look, into g: inout Grid) {
 enum Activity: String, CaseIterable {
     case idle, sleep, walk, code, ponder, eat, play, coffee, dance
     case chase, alert, ask, sick, fainted, sad, petted, thinking, carried
-    case tossed, splat, grumpy
+    case tossed, splat, grumpy, queasy, verySick, dead, reborn
 
     var label: String {
         switch self {
@@ -327,7 +354,9 @@ enum Activity: String, CaseIterable {
         case .chase: return "Chasing the mouse"
         case .alert: return "Claude finished"
         case .ask: return "Claude needs permission"
-        case .sick: return "Sick (usage limit close)"
+        case .queasy: return "Queasy (5-hour limit half used)"
+        case .sick: return "Sick (5-hour limit close)"
+        case .verySick: return "Very sick (5-hour limit nearly hit)"
         case .fainted: return "Fainted (usage limit hit)"
         case .sad: return "Sad (neglected)"
         case .petted: return "Being petted"
@@ -336,13 +365,16 @@ enum Activity: String, CaseIterable {
         case .tossed: return "Thrown across the screen"
         case .splat: return "Landed hard"
         case .grumpy: return "Sulking"
+        case .dead: return "RIP (weekly limit hit)"
+        case .reborn: return "Back from the dead"
         }
     }
 
     /// Reactions are triggered by Claude, never chosen at random.
     var isReaction: Bool {
         switch self {
-        case .chase, .alert, .ask, .fainted, .sad, .petted, .thinking, .carried, .tossed, .splat, .grumpy: return true
+        case .chase, .alert, .ask, .fainted, .sad, .petted, .thinking, .carried, .tossed, .splat, .grumpy,
+             .dead, .reborn: return true
         default: return false
         }
     }
@@ -367,13 +399,17 @@ struct FrameSpec {
 enum Sprites {
     private static var cache: [String: Animation] = [:]
 
-    static func animation(_ a: Activity, bloated: Bool, sweat: Bool, mirrored: Bool = false) -> Animation {
-        let key = "\(a.rawValue)-\(bloated)-\(sweat)-\(mirrored)"
+    /// `sickness` is the 5-hour-limit stage (0 fine, 1 queasy, 2 sick, 3 very sick) and
+    /// colours every animation, so he looks unwell even while busy.
+    static func animation(_ a: Activity, bloated: Bool, sweat: Bool, mirrored: Bool = false, sickness: Int = 0) -> Animation {
+        let key = "\(a.rawValue)-\(bloated)-\(sweat)-\(mirrored)-\(sickness)"
         if let hit = cache[key] { return hit }
         var specs = frameSpecs(a)
         for i in specs.indices {
             if bloated { specs[i].look.bloated = true }
-            if sweat || bloated, !specs[i].overlays.contains(where: { $0.id == "sweat" }) {
+            if sickness >= 2 { specs[i].look.sick = true }
+            if sickness >= 3 { specs[i].look.green = true }
+            if sweat || bloated || sickness >= 1, !specs[i].overlays.contains(where: { $0.id == "sweat" }) {
                 specs[i].overlays.append(Overlays.sweat(x: 21, y: 12))
             }
         }
@@ -398,7 +434,11 @@ enum Sprites {
         case .chase: return 0.16
         case .alert: return 0.28
         case .ask: return 0.32
+        case .queasy: return 1.0
         case .sick: return 1.0
+        case .verySick: return 0.22
+        case .dead: return 0.6
+        case .reborn: return 0.3
         case .fainted: return 1.0
         case .sad: return 1.1
         case .petted: return 0.35
@@ -478,6 +518,27 @@ enum Sprites {
                     F(Look(legs: .tuck, lift: 1), [O.query(y: 0)]),
                     F(Look(), [O.query()]),
                     F(Look(eyes: .droopy), [O.query()])]
+        case .queasy:
+            // Off colour: droopy, a little sweat, sitting low.
+            return [F(Look(eyes: .droopy, mouth: .small), [O.sweat()]),
+                    F(Look(eyes: .droopy, mouth: .small, squash: 1), [O.sweat(y: 13)]),
+                    F(Look(eyes: .blink, mouth: .small, squash: 1), [O.sweat(y: 13)]),
+                    F(Look(eyes: .droopy, mouth: .small), [O.sweat(x: 2, y: 12)])]
+        case .verySick:
+            // Green and trembling, sweating on both sides.
+            return [F(Look(eyes: .droopy, mouth: .frown, green: true), [O.sweat(), O.sweat(x: 2, y: 12)]),
+                    F(Look(eyes: .droopy, mouth: .frown, lift: 1, green: true), [O.sweat(y: 13), O.sweat(x: 2, y: 13)]),
+                    F(Look(eyes: .blink, mouth: .frown, green: true), [O.sweat(), O.sweat(x: 2, y: 12)]),
+                    F(Look(eyes: .droopy, mouth: .frown, lift: 1, green: true), [O.sweat(y: 11), O.sweat(x: 2, y: 11)])]
+        case .dead:
+            return [F(Look(hidden: true), [O.grave, O.ghost(y: 2)]),
+                    F(Look(hidden: true), [O.grave, O.ghost(y: 1)]),
+                    F(Look(hidden: true), [O.grave, O.ghost(y: 2)]),
+                    F(Look(hidden: true), [O.grave, O.ghost(y: 3)])]
+        case .reborn:
+            return [F(Look(eyes: .happy, mouth: .smile), [O.sparkle(x: 2, y: 4), O.sparkle(x: 19, y: 7)]),
+                    F(Look(eyes: .happy, legs: .tuck, mouth: .smile, lift: 2), [O.sparkle(x: 18, y: 2), O.sparkle(x: 3, y: 9)]),
+                    F(Look(eyes: .happy, mouth: .smile), [O.sparkle(x: 1, y: 8), O.sparkle(x: 20, y: 4)])]
         case .sick:
             return [F(Look(eyes: .droopy, mouth: .frown, sick: true), [O.sweat()]),
                     F(Look(eyes: .droopy, mouth: .frown, sick: true), [O.sweat(y: 13)]),
