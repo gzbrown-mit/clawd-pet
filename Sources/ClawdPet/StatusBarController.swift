@@ -113,6 +113,7 @@ final class StatusBarController: NSObject, NSMenuDelegate {
         let settings = NSMenu()
         settings.addItem(check("Hide while VS Code is in front", Prefs.hideWhenEditorFront, #selector(toggleHide)))
         settings.addItem(check("Come out over VS Code when Claude needs me", Prefs.peekWhenAttention, #selector(togglePeek)))
+        settings.addItem(check("Stay quiet about the window I'm looking at (Accessibility)", Prefs.skipFrontWindow, #selector(toggleSkipFront)))
         settings.addItem(check("Calm down when I return to VS Code", Prefs.calmWhenEditorFront, #selector(toggleCalm)))
         settings.addItem(check("Play a sound when Claude finishes", Prefs.playSound, #selector(toggleSound)))
         settings.addItem(check("Find sessions by watching transcripts", Prefs.scanTranscripts, #selector(toggleScan)))
@@ -246,13 +247,14 @@ final class StatusBarController: NSObject, NSMenuDelegate {
 
     @objc private func toggleHide() { Prefs.hideWhenEditorFront.toggle() }
     @objc private func togglePeek() { Prefs.peekWhenAttention.toggle() }
+    @objc private func toggleSkipFront() { Prefs.skipFrontWindow.toggle() }
     @objc private func toggleCalm() { Prefs.calmWhenEditorFront.toggle() }
     @objc private func toggleSound() { Prefs.playSound.toggle() }
     @objc private func toggleScan() { Prefs.scanTranscripts.toggle() }
 
     @objc private func accessibility() {
         if WindowRaiser.isTrusted {
-            alert("Accessibility is on", "Clawd will raise the window that already has a project open. If this stops working after you rebuild the app, untick and re-tick ClawdPet in System Settings > Privacy & Security > Accessibility: macOS treats each rebuild as a new app.")
+            alert("Accessibility is on", "Clawd can raise the window that already has a project open, and can tell when you are already looking at a session's window so it stays quiet. If this stops working after you rebuild the app, untick and re-tick ClawdPet in System Settings > Privacy & Security > Accessibility: macOS treats each rebuild as a new app.")
         } else {
             WindowRaiser.requestTrust()
             WindowRaiser.openAccessibilitySettings()

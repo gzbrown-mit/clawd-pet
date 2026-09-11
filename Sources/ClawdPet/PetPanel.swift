@@ -127,6 +127,8 @@ final class PetController {
     private var wanderPauseUntil = Date.distantPast
     private var pettedUntil = Date.distantPast
     private var chaseParked = false
+    private var wasAlerting = false
+    private var goingHome = false
     var forcedActivity: Activity?
     var forcedUntil = Date.distantPast
     var demoMode = false
@@ -222,6 +224,10 @@ final class PetController {
             let shouldHide = Prefs.hideWhenEditorFront && editorFront && !demoMode && !peek
             if shouldHide {
                 if panel.isVisible { panel.orderOut(nil) }
+                // Nobody can see it, so it is simply back home when it next appears.
+                pos = home
+                goingHome = false
+                panel.setFrameOrigin(pos)
                 return
             }
             if !panel.isVisible { panel.orderFrontRegardless() }
@@ -233,7 +239,8 @@ final class PetController {
         if let t = target {
             let dx = t.x - pos.x, dy = t.y - pos.y
             let dist = hypot(dx, dy)
-            let stepLen = speed(for: chosen) / 30
+            // Heading home after an alert is a brisk trot, not the usual amble.
+            let stepLen = (goingHome && chosen == .walk ? 130 : speed(for: chosen)) / 30
             if dist > stepLen {
                 pos.x += dx / dist * stepLen
                 pos.y += dy / dist * stepLen
@@ -272,6 +279,7 @@ final class PetController {
         if let s = model.attentionSessions.first {
             // Chase the cursor, then park once close so it is easy to click. It only
             // sets off again if the cursor wanders far away.
+            wasAlerting = true
             let m = NSEvent.mouseLocation
             let center = CGPoint(x: pos.x + size / 2, y: pos.y + size / 2)
             let cursorDist = hypot(m.x - center.x, m.y - center.y)
@@ -288,7 +296,16 @@ final class PetController {
             return (s.attention == .permission ? .ask : .alert, nil)
         }
         chaseParked = false
+        if wasAlerting {
+            // Alert over (clicked, calmed, or muted): go back to the usual spot.
+            wasAlerting = false
+            goingHome = true
+        }
         if now < pettedUntil { return (.petted, nil) }
+        if goingHome {
+            if hypot(home.x - pos.x, home.y - pos.y) > 3 { return (.walk, home) }
+            goingHome = false
+        }
         if now < model.thinkingUntil { return (.thinking, nil) }
 
         if !model.workingSessions.isEmpty {
@@ -388,6 +405,7 @@ final class PetController {
             home = pos
             Prefs.home = home
             wanderTarget = nil
+            goingHome = false
             return
         }
         clicked()

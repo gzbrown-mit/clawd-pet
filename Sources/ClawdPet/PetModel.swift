@@ -26,6 +26,11 @@ enum Prefs {
         get { bool("peekWhenAttention", default: true) }
         set { d.set(newValue, forKey: "peekWhenAttention") }
     }
+    /// Stay quiet when the session's window is the one in front (needs Accessibility).
+    static var skipFrontWindow: Bool {
+        get { bool("skipFrontWindow", default: true) }
+        set { d.set(newValue, forKey: "skipFrontWindow") }
+    }
     static var playSound: Bool {
         get { bool("playSound", default: false) }
         set { d.set(newValue, forKey: "playSound") }
@@ -233,12 +238,18 @@ final class PetModel {
         default:
             break
         }
+        var seenAlready = false
+        if newAttention != nil, userIsLooking(at: s) {
+            // You are looking right at it: nothing to announce.
+            newAttention = nil
+            seenAlready = true
+        }
         if let a = newAttention {
             s.attention = a
             s.attentionSince = now
         }
         sessions[sid] = s
-        if name != "PostToolUse" && name != "PreToolUse" { log("\(name) \(s.name)") }
+        if name != "PostToolUse" && name != "PreToolUse" { log("\(name) \(s.name)" + (seenAlready ? " (you were looking)" : "")) }
         onChange?()
         if newAttention != nil, s.watched { onAttention?(s) }
     }
@@ -282,7 +293,7 @@ final class PetModel {
                 switch snap.lastKind {
                 case .assistantDone:
                     s.working = false
-                    if wasWorking, !isNew, s.attention == nil {
+                    if wasWorking, !isNew, s.attention == nil, !userIsLooking(at: s) {
                         s.attention = .finished
                         s.attentionSince = now
                         Prefs.totalFinished += 1
@@ -302,6 +313,11 @@ final class PetModel {
         }
         onChange?()
         for s in newlyFinished where s.watched { onAttention?(s) }
+    }
+
+    /// True when the user is already looking at this session's window.
+    private func userIsLooking(at s: Session) -> Bool {
+        Prefs.skipFrontWindow && WindowRaiser.frontWindowShows(cwd: s.cwd)
     }
 
     private func parseLimit(_ any: Any?) -> RateLimit? {

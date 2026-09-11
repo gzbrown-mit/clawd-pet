@@ -78,7 +78,30 @@ enum WindowRaiser {
         return false
     }
 
-    private static func segments(_ title: String) -> [String] {
+    /// Title of the window the user is looking at, when the frontmost app is an editor
+    /// or terminal and Accessibility allows us to ask.
+    static func frontWindowTitle() -> String? {
+        guard isTrusted, let app = NSWorkspace.shared.frontmostApplication,
+              let id = app.bundleIdentifier,
+              (PetController.editorBundleIDs + terminalBundleIDs).contains(id) else { return nil }
+        let axApp = AXUIElementCreateApplication(app.processIdentifier)
+        var w: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(axApp, kAXFocusedWindowAttribute as CFString, &w) == .success,
+              let win = w, CFGetTypeID(win) == AXUIElementGetTypeID() else { return nil }
+        var t: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(win as! AXUIElement, kAXTitleAttribute as CFString, &t) == .success else { return nil }
+        return t as? String
+    }
+
+    /// True when the window in front carries this project's name, i.e. the user is
+    /// already looking at the session. Always false without Accessibility.
+    static func frontWindowShows(cwd: String) -> Bool {
+        guard let title = frontWindowTitle() else { return false }
+        let segs = segments(title)
+        return names(for: cwd).contains { segs.contains($0.lowercased()) }
+    }
+
+    static func segments(_ title: String) -> [String] {
         title.lowercased()
             .replacingOccurrences(of: " — ", with: "\u{1}")
             .replacingOccurrences(of: " - ", with: "\u{1}")
