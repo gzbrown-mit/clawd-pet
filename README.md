@@ -41,7 +41,7 @@ pile behind that he really would like you to clean up.
 | Nothing for 90 s | Sleeps in his dog bed with Zs drifting up |
 | Happiness under 25 | Sad and teary |
 | You click him when nothing is waiting | Petted and beaming |
-| You drag him | That is his new home spot |
+| You drag him | Picked up: wide eyes, legs dangling and wiggling until you set him down. Where you drop him is his new home spot |
 
 When he chases your cursor he parks as soon as he gets close and stays put while your cursor is
 nearby, so he is easy to click. He only sets off again if you move more than about 260 px away.
@@ -87,8 +87,9 @@ grant across rebuilds, make a self-signed code-signing certificate once (Keychai
 Certificate Assistant > Create a Certificate, type Code Signing) and build with
 `CLAWDPET_SIGN_IDENTITY="<its name>" ./scripts/run.sh`.
 
-Click him when nothing is waiting to pet him. Drag him to set a new home spot. Right-click or use
-the menu bar icon for sessions, meters, settings, and a Playground that fakes every state.
+Click him when nothing is waiting to pet him. Drag him to set a new home spot (he wriggles the
+whole way). Right-click or use the menu bar icon for sessions, meters, settings, and a Playground
+that fakes every state.
 
 ## How sessions are found
 

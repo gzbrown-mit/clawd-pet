@@ -267,6 +267,8 @@ final class PetController {
     }
 
     private func chooseActivity(_ now: Date) -> (Activity, CGPoint?) {
+        // Being dragged: legs dangle until you set it down.
+        if dragStart != nil, dragged { return (.carried, nil) }
         if demoMode {
             if now > demoNext {
                 demoIndex = (demoIndex + 1) % PetController.demoCast.count

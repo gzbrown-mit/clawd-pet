@@ -42,7 +42,7 @@ enum Palette {
 }
 
 enum Eyes { case open, blink, happy, droopy, x, sad, wink, down }
-enum Legs { case stand, walkA, walkB, tuck, spread }
+enum Legs { case stand, walkA, walkB, tuck, spread, dangleA, dangleB }
 enum Mouth { case none, open, small, smile, frown }
 
 struct Look {
@@ -225,16 +225,21 @@ func compose(_ look: Look, overlays: [Overlay], underlays: [Overlay] = []) -> Gr
     case .frown: put(mr, 6, "k"); put(mr, 9, "k"); put(mr - 1, 7, "k"); put(mr - 1, 8, "k")
     }
 
-    // Feet
+    // Feet. Dangling legs (picked up) are two pixels long, and their tips swing
+    // outward and inward on alternate frames so they jiggle.
     let feet: [Int]
+    var tips: [Int] = []
     switch look.legs {
     case .stand: feet = [4, 6, 9, 11]
     case .walkA: feet = [3, 6, 9, 12]
     case .walkB: feet = [5, 6, 9, 10]
     case .spread: feet = [2, 5, 10, 13]
     case .tuck: feet = []
+    case .dangleA: feet = [4, 6, 9, 11]; tips = [3, 6, 9, 12]
+    case .dangleB: feet = [4, 6, 9, 11]; tips = [5, 7, 8, 10]
     }
     for c in feet { put(13, c, "d") }
+    for c in tips { put(14, c, "d") }
 
     if look.sick {
         let tint: [Character: Character] = ["o": "q", "d": "v", "l": "j"]
@@ -247,7 +252,7 @@ func compose(_ look: Look, overlays: [Overlay], underlays: [Overlay] = []) -> Gr
 
 enum Activity: String, CaseIterable {
     case idle, sleep, walk, code, ponder, eat, play, coffee, dance
-    case chase, alert, ask, sick, fainted, sad, petted, thinking
+    case chase, alert, ask, sick, fainted, sad, petted, thinking, carried
 
     var label: String {
         switch self {
@@ -268,13 +273,14 @@ enum Activity: String, CaseIterable {
         case .sad: return "Sad (neglected)"
         case .petted: return "Being petted"
         case .thinking: return "Compacting"
+        case .carried: return "Picked up"
         }
     }
 
     /// Reactions are triggered by Claude, never chosen at random.
     var isReaction: Bool {
         switch self {
-        case .chase, .alert, .ask, .fainted, .sad, .petted, .thinking: return true
+        case .chase, .alert, .ask, .fainted, .sad, .petted, .thinking, .carried: return true
         default: return false
         }
     }
@@ -335,6 +341,7 @@ enum Sprites {
         case .sad: return 1.1
         case .petted: return 0.35
         case .thinking: return 0.5
+        case .carried: return 0.12
         }
     }
 
@@ -425,6 +432,13 @@ enum Sprites {
             return [F(Look(eyes: .droopy), [O.dots(1)]),
                     F(Look(eyes: .droopy), [O.dots(2)]),
                     F(Look(eyes: .droopy), [O.dots(3)])]
+        case .carried:
+            // Held up by the scruff: wide eyes, a little "o" mouth, legs dangling and
+            // wiggling, and the body bobbing by a pixel.
+            return [F(Look(legs: .dangleA, mouth: .open, lift: 1)),
+                    F(Look(legs: .dangleB, mouth: .open, lift: 1)),
+                    F(Look(legs: .dangleA, mouth: .open, lift: 2)),
+                    F(Look(legs: .dangleB, mouth: .open, lift: 2))]
         }
     }
 }
