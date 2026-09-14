@@ -101,7 +101,9 @@ final class StatusBarController: NSObject, NSMenuDelegate {
         }
         let hearts = Int((model.happiness / 20).rounded(.up))
         menu.addItem(label("Happiness: " + String(repeating: "♥", count: max(hearts, 0)) + String(repeating: "♡", count: max(5 - hearts, 0))))
-        menu.addItem(label("Age: \(model.ageDays) day\(model.ageDays == 1 ? "" : "s") · fed \(Prefs.totalFinished) finished turns · petted \(Prefs.totalPets) times"))
+        menu.addItem(label("Age: \(model.ageDays) day\(model.ageDays == 1 ? "" : "s")"))
+        let finished = Prefs.finishedToday
+        menu.addItem(label("Today: fed \(times(Prefs.fedToday)) · petted \(times(Prefs.petsToday)) · \(finished) finished turn\(finished == 1 ? "" : "s")"))
         menu.addItem(.separator())
 
         let hooksInstalled = HookInstaller.isInstalled
@@ -177,6 +179,10 @@ final class StatusBarController: NSObject, NSMenuDelegate {
         it.target = self
         it.representedObject = rep
         return it
+    }
+
+    private func times(_ n: Int) -> String {
+        n == 1 ? "once" : n == 2 ? "twice" : "\(n) times"
     }
 
     private func truncate(_ text: String, _ n: Int) -> String {

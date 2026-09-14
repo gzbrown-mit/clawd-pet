@@ -81,13 +81,34 @@ enum Prefs {
         return now
     }
     static func resetBirth() { d.set(Date(), forKey: "birth") }
-    static var totalPets: Int {
-        get { d.integer(forKey: "totalPets") }
-        set { d.set(newValue, forKey: "totalPets") }
+    /// Today's counters. They start over at local midnight, so the menu shows what
+    /// has happened today rather than a lifetime total.
+    static var petsToday: Int {
+        get { today("petsToday") }
+        set { setToday("petsToday", newValue) }
     }
-    static var totalFinished: Int {
-        get { d.integer(forKey: "totalFinished") }
-        set { d.set(newValue, forKey: "totalFinished") }
+    static var fedToday: Int {
+        get { today("fedToday") }
+        set { setToday("fedToday", newValue) }
+    }
+    static var finishedToday: Int {
+        get { today("finishedToday") }
+        set { setToday("finishedToday", newValue) }
+    }
+    private static let dailyKeys = ["petsToday", "fedToday", "finishedToday"]
+    private static func today(_ key: String) -> Int {
+        rollOverDay()
+        return d.integer(forKey: key)
+    }
+    private static func setToday(_ key: String, _ value: Int) {
+        rollOverDay()
+        d.set(value, forKey: key)
+    }
+    /// Clears the daily counters the first time they are touched on a new day.
+    private static func rollOverDay() {
+        if let day = d.object(forKey: "countsDay") as? Date, Calendar.current.isDateInToday(day) { return }
+        d.set(Date(), forKey: "countsDay")
+        for key in dailyKeys { d.removeObject(forKey: key) }
     }
     static var scanTranscripts: Bool {
         get { bool("scanTranscripts", default: true) }
@@ -256,7 +277,7 @@ final class PetModel {
             if s.attention == nil || s.attention == .permission {
                 s.attention = nil
                 newAttention = .finished
-                Prefs.totalFinished += 1
+                Prefs.finishedToday += 1
             }
         case "Notification":
             let type = (event["notification_type"] as? String)
@@ -352,7 +373,7 @@ final class PetModel {
                     if wasWorking, !isNew, s.attention == nil, !userIsLooking(at: s, for: .finished) {
                         s.attention = .finished
                         s.attentionSince = now
-                        Prefs.totalFinished += 1
+                        Prefs.finishedToday += 1
                         newlyFinished.append(s)
                     }
                 case .userPrompt:
@@ -441,7 +462,7 @@ final class PetModel {
 
     func pet() {
         happiness += 12
-        Prefs.totalPets += 1
+        Prefs.petsToday += 1
         onChange?()
     }
 
