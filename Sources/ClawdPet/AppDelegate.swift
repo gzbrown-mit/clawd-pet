@@ -29,6 +29,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 let vx = (json["vx"] as? Double) ?? 1500, vy = (json["vy"] as? Double) ?? 900
                 self?.controller.toss(CGPoint(x: vx, y: vy))
             }
+            s.onFeed = { [weak self] _ in
+                let fed = self?.controller.feed() ?? false
+                PetModel.shared.note(fed ? "Fed a cookie through /feed" : "Cookie through /feed refused: he cannot eat right now")
+            }
             s.onRaise = { json in
                 guard let cwd = json["cwd"] as? String else { return }
                 let outcome = PetController.openInEditor(cwd: cwd)

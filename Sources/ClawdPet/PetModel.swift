@@ -466,6 +466,13 @@ final class PetModel {
         onChange?()
     }
 
+    /// A cookie from you.
+    func feed() {
+        happiness += 10
+        Prefs.fedToday += 1
+        onChange?()
+    }
+
     func thrown() {
         happiness -= 15
         log("Thrown across the screen")

@@ -30,6 +30,7 @@ enum Palette {
         "y": hex(0xE0A03A), // amber
         "g": hex(0x63B96F), // green
         "t": hex(0xC98A5A), // tan: cookie, mess
+        "c": hex(0xA66C42), // cookie crust: the shaded rim, so the cookie needs no outline
         "b": hex(0x7A4A2B), // dark brown: chips, coffee
         "s": hex(0x6E7A8F), // slate
         "h": hex(0x9AA7BC), // light slate
@@ -103,10 +104,13 @@ enum Overlays {
                               ".uuuuuuuuuuuuuuuuuu."], x: 1, y: 19, id: "bed")
 
     // Props
-    static let cookieFull = Overlay([".kkkk.", "kttttk", "ktbttk", "kttbtk", "ktttbk", ".kkkk."],
+    // Cookie. No ink outline, which looked heavy on light wallpapers: the tan body
+    // reads on white and black alike, a darker crust along the lower right gives it
+    // depth, and the chips do the rest.
+    static let cookieFull = Overlay([".tttt.", "ttbttt", "ttttbt", "tbtttc", "ttbtcc", ".cccc."],
                                     x: 0, y: 16, id: "food")
-    static let cookieBitten = Overlay([".kkk.", "ktttk", "ktbtk", "kttbk", ".kkk."], x: 0, y: 17, id: "food")
-    static let cookieCrumb = Overlay([".kk.", "kttk", ".kk."], x: 1, y: 19, id: "food")
+    static let cookieBitten = Overlay([".ttt.", "ttbtt", "tttbt", "tbttc", ".ccc."], x: 0, y: 17, id: "food")
+    static let cookieCrumb = Overlay([".tt.", "tbtc", ".cc."], x: 1, y: 19, id: "food")
     static func ball(x: Int, y: Int) -> Overlay {
         Overlay([".rrr.", "rwrrr", "rrrrr", "rrrrr", ".rrr."], x: x, y: y, id: "ball")
     }
@@ -369,11 +373,11 @@ enum Activity: String, CaseIterable {
         }
     }
 
-    /// Reactions are triggered by Claude, never chosen at random.
+    /// Reactions are triggered by Claude or by you, never chosen at random.
     var isReaction: Bool {
         switch self {
         case .chase, .alert, .ask, .fainted, .sad, .petted, .thinking, .carried, .tossed, .splat, .grumpy,
-             .dead, .reborn: return true
+             .dead, .reborn, .eat: return true
         default: return false
         }
     }

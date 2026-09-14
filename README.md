@@ -10,8 +10,9 @@ Claude work so you don't have to.
 
 While Claude is busy, so is Clawd. He hammers away on a tiny laptop, drifts off to think in a little
 grey bubble, and ambles left and right when his legs get restless. Every so often he treats himself
-to a cookie, a coffee, a bouncy ball, or a short victory dance. When nothing has happened for a
-while he curls up in his dog bed and snores Zs at the ceiling.
+to a coffee, a bouncy ball, or a short victory dance. Cookies are yours to give: double-click him
+and he stops whatever he is doing for a snack. When nothing has happened for a while he curls up in
+his dog bed and snores Zs at the ceiling.
 
 The moment a session finishes, or Claude stops to ask permission, Clawd drops everything. He
 scuttles across the screen to wherever your mouse is, plants himself next to it, and hops up and
@@ -35,7 +36,7 @@ pile behind that he really would like you to clean up.
 
 | Claude Code signal | Clawd |
 |---|---|
-| `UserPromptSubmit`, tool use | Busy. Long stretches of typing on his laptop (2 to 5 min), thinking in a grey thought bubble (1 to 2.5 min), ambling left and right (1 to 3 min), or sitting and breathing, broken up by short treats: a cookie, a coffee, a ball, a dance (10 to 30 s) |
+| `UserPromptSubmit`, tool use | Busy. Long stretches of typing on his laptop (2 to 5 min), thinking in a grey thought bubble (1 to 2.5 min), ambling left and right (1 to 3 min), or sitting and breathing, broken up by short treats: a coffee, a ball, a dance (10 to 30 s) |
 | `Stop` (Claude finished a turn) | Runs to your cursor with a red `!` and hops until you click him, then trots home |
 | `PermissionRequest`, `Notification` permission_prompt / idle_prompt | Same, with a yellow `?`. He calms down on his own once you answer the prompt and tools start running again |
 | Session finishes in the window you are looking at | Nothing. He assumes you saw it (needs Accessibility, see below) |
@@ -49,6 +50,7 @@ pile behind that he really would like you to clean up.
 | Nothing for 90 s | Sleeps in his dog bed with Zs drifting up |
 | Happiness under 25 | Sad and teary |
 | You click him when nothing is waiting | Petted and beaming |
+| You double-click him | Eats the cookie you gave him, then goes back to what he was doing. Also in the menu as Feed him a cookie |
 | You drag him | Picked up: wide eyes, legs dangling and wiggling until you set him down. Where you drop him is his new home spot |
 | You fling him | Curls into a ball, spins through the air, bounces off the screen edges, lands hard, then sulks where he fell for 30 s. Happiness takes a hit; a pat ends the sulk |
 
@@ -107,9 +109,11 @@ finished session logs the window in front and whether he stayed quiet. `ClawdPet
 `curl -X POST localhost:4242/raise -d '{"cwd":"/path/to/project"}'` does the same through the
 running app.
 
-Click him when nothing is waiting to pet him. Drag him to set a new home spot (he wriggles the
-whole way). Right-click or use the menu bar icon for sessions, meters, settings, and a Playground
-that fakes every state.
+Click him when nothing is waiting to pet him, and double-click to feed him a cookie (the menu has
+a Feed him a cookie item too, greyed out while he is still chewing). The menu keeps count of today's
+cookies, pats and finished turns; the counts start over at midnight. Drag him to set a new home spot
+(he wriggles the whole way). Right-click or use the menu bar icon for sessions, meters, settings,
+and a Playground that fakes every state.
 
 ## Battery
 
@@ -166,6 +170,7 @@ it. Muted sessions still show in the list but never trigger the chase.
 ./scripts/simulate.sh limit    # hit the 5-hour limit
 ./scripts/simulate.sh weekly   # hit the weekly limit: gravestone, reborn after 90 s
 ./scripts/simulate.sh reset
+curl -X POST localhost:4242/feed -d '{}'   # give him a cookie
 open dist/ClawdPet.app --args --demo      # cycle every animation
 .build/release/ClawdPet --render-sheet sheet.png   # all frames on light, dark and mid grey
 ```

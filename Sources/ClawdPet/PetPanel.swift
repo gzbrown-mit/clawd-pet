@@ -98,13 +98,13 @@ final class PetController {
 
     var menuProvider: (() -> NSMenu)?
 
-    /// Long stretches of work, broken up by short treats.
+    /// Long stretches of work, broken up by short treats. Cookies are not on the
+    /// list: those come from you (double-click him, or Feed him a cookie in the menu).
     static let routine: [RoutineEntry] = [
         RoutineEntry(activity: .code, weight: 12, range: 120...300),
         RoutineEntry(activity: .walk, weight: 7, range: 70...180),
         RoutineEntry(activity: .ponder, weight: 5, range: 60...150),
         RoutineEntry(activity: .idle, weight: 4, range: 40...90),
-        RoutineEntry(activity: .eat, weight: 3, range: 14...26),
         RoutineEntry(activity: .coffee, weight: 3, range: 18...32),
         RoutineEntry(activity: .play, weight: 2, range: 14...26),
         RoutineEntry(activity: .dance, weight: 1, range: 9...16)
@@ -124,6 +124,8 @@ final class PetController {
     private var wanderTarget: CGPoint?
     private var wanderPauseUntil = Date.distantPast
     private var pettedUntil = Date.distantPast
+    private var eatingUntil = Date.distantPast
+    private var pendingPat = 0               // token for a pat waiting out the double-click interval
     private var chaseParked = false
     private var wasAlerting = false
     private var goingHome = false
@@ -332,6 +334,9 @@ final class PetController {
         if let f = forcedActivity, now < forcedUntil { return (f, nil) }
         if model.isDead { return (.dead, home) }
         if model.isFainted { return (.fainted, home) }
+        // A cookie from you comes before everything else: he stops to eat it, then
+        // carries on with whatever he was doing.
+        if now < eatingUntil { return (.eat, nil) }
         if let s = model.attentionSessions.first {
             // Chase the cursor, then park once close so it is easy to click. It only
             // sets off again if the cursor wanders far away.
@@ -501,6 +506,7 @@ final class PetController {
         stats.append("Happiness \(Int(model.happiness))")
         lines.append(stats.joined(separator: " · "))
         if model.mess { lines.append("Click to clean up after the compaction") }
+        lines.append("Click to pet · double-click to feed him a cookie")
         return lines.joined(separator: "\n")
     }
 
@@ -540,10 +546,18 @@ final class PetController {
             }
             return
         }
-        clicked()
+        clicked(count: event.clickCount)
     }
 
-    private func clicked() {
+    private func clicked(count: Int) {
+        defer { poke() }
+        // The second click of a double-click is a cookie. The first half already did
+        // its job (a clean-up, an acknowledgement, or a pat); a pat is taken back,
+        // since feeding was the intent. A third click does nothing.
+        if count >= 2 {
+            if count == 2, feed() { pendingPat += 1 }
+            return
+        }
         if model.mess {
             model.cleanMess()
             pettedUntil = Date().addingTimeInterval(1.5)
@@ -556,10 +570,33 @@ final class PetController {
             offerAccessibilityOnce()
             return
         }
-        model.pet()
+        // A pat. The hearts show at once; the count and the happiness wait out the
+        // double-click interval in case this turns out to be the first half of a feed.
         sulkUntil = .distantPast   // a pat is an apology accepted
         pettedUntil = Date().addingTimeInterval(2.4)
+        pendingPat += 1
+        let token = pendingPat
+        DispatchQueue.main.asyncAfter(deadline: .now() + NSEvent.doubleClickInterval) { [weak self] in
+            guard let self = self, self.pendingPat == token else { return }
+            self.model.pet()
+        }
     }
+
+    /// A cookie from you: he stops whatever he is doing and eats it. Refused while he
+    /// is dead, fainted, or still chewing the last one.
+    @discardableResult
+    func feed() -> Bool {
+        guard canEat else { return false }
+        pettedUntil = .distantPast
+        sulkUntil = .distantPast   // a cookie is an apology accepted too
+        let seconds = Double(Sprites.frameSpecs(.eat).count) * Sprites.frameDuration(.eat)
+        eatingUntil = Date().addingTimeInterval(seconds)
+        model.feed()
+        poke()
+        return true
+    }
+
+    var canEat: Bool { !model.isDead && !model.isFainted && Date() >= eatingUntil }
 
     /// One-time nudge: without Accessibility we can only bring the editor forward,
     /// not the exact window Claude is running in.

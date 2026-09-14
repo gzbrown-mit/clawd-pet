@@ -1,7 +1,7 @@
 import AppKit
 import ServiceManagement
 
-final class StatusBarController: NSObject, NSMenuDelegate {
+final class StatusBarController: NSObject, NSMenuDelegate, NSMenuItemValidation {
     private let item: NSStatusItem
     private let menu = NSMenu()
     private weak var controller: PetController?
@@ -41,6 +41,7 @@ final class StatusBarController: NSObject, NSMenuDelegate {
     private func populate(_ menu: NSMenu) {
         menu.removeAllItems()
         menu.addItem(label("Clawd: \(model.moodLine)"))
+        menu.addItem(action("Feed him a cookie", #selector(feed)))
         if let err = serverError {
             menu.addItem(label("Listener error: \(err)"))
         }
@@ -212,6 +213,14 @@ final class StatusBarController: NSObject, NSMenuDelegate {
     }
 
     // MARK: Actions
+
+    /// Greys out the cookie while he cannot eat (dead, fainted, or still chewing).
+    func validateMenuItem(_ item: NSMenuItem) -> Bool {
+        if item.action == #selector(feed) { return controller?.canEat ?? false }
+        return true
+    }
+
+    @objc private func feed() { controller?.feed() }
 
     @objc private func openSession(_ sender: NSMenuItem) {
         guard let id = sender.representedObject as? String, let s = model.sessions[id] else { return }

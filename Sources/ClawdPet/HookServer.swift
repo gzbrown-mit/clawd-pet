@@ -9,9 +9,10 @@ final class HookServer {
     var onHook: (([String: Any]) -> Void)?
     var onStatus: (([String: Any]) -> Void)?
     /// Debug aids: POST /raise {"cwd": "..."} behaves like clicking the pet for that project;
-    /// POST /toss {"vx": px/s, "vy": px/s} throws it.
+    /// POST /toss {"vx": px/s, "vy": px/s} throws it; POST /feed {} gives it a cookie.
     var onRaise: (([String: Any]) -> Void)?
     var onToss: (([String: Any]) -> Void)?
+    var onFeed: (([String: Any]) -> Void)?
     private(set) var lastError: String?
 
     init(port: UInt16) throws {
@@ -83,6 +84,7 @@ final class HookServer {
                     if path.hasPrefix("/status") { self?.onStatus?(json) }
                     else if path.hasPrefix("/raise") { self?.onRaise?(json) }
                     else if path.hasPrefix("/toss") { self?.onToss?(json) }
+                    else if path.hasPrefix("/feed") { self?.onFeed?(json) }
                     else { self?.onHook?(json) }
                 }
             } else {
