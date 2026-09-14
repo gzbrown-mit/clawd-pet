@@ -18,11 +18,19 @@ final class TranscriptScanner {
     private let queue = DispatchQueue(label: "clawdpet.scanner", qos: .utility)
     private var cache: [String: (mtime: Date, snap: TranscriptSnapshot)] = [:]
     private var timer: Timer?
+    private var lastScanStarted = Date.distantPast
     var window: TimeInterval = 2 * 3600
     var onResult: (([TranscriptSnapshot]) -> Void)?
+    /// While the display is asleep nobody is watching, so one scan a minute is plenty.
+    var throttled = false
 
     func start(interval: TimeInterval = 5) {
-        timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in self?.scanAsync() }
+        timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+            guard let self = self else { return }
+            if self.throttled, Date().timeIntervalSince(self.lastScanStarted) < 60 { return }
+            self.scanAsync()
+        }
+        timer!.tolerance = interval * 0.2
         RunLoop.main.add(timer!, forMode: .common)
         scanAsync()
     }
@@ -33,6 +41,7 @@ final class TranscriptScanner {
     }
 
     func scanAsync() {
+        lastScanStarted = Date()
         queue.async { [weak self] in
             guard let self = self else { return }
             let result = self.scan()

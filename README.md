@@ -111,6 +111,17 @@ Click him when nothing is waiting to pet him. Drag him to set a new home spot (h
 whole way). Right-click or use the menu bar icon for sessions, meters, settings, and a Playground
 that fakes every state.
 
+## Battery
+
+He is built to be cheap to keep around. The animation loop paces itself: it wakes at 30 Hz only
+while he is actually moving, otherwise only when the next frame of the current animation is due
+(once a second while he idles or sleeps), and it all but stops while the display is asleep (one
+check every 30 s). App switches and hook events wake it immediately instead of being polled for. Timers
+carry tolerance so macOS can batch his wakeups with everything else, happiness is only written to
+disk when the whole number changes, and the transcript scanner drops to once a minute while the
+display is off. With the lid closed and the Mac asleep nothing runs at all; the pet cannot keep
+the machine awake and holds no power assertions.
+
 ## How sessions are found
 
 Two sources, merged by session id:

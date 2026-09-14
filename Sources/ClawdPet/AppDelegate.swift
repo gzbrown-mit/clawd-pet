@@ -16,7 +16,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller = PetController()
         controller.demoMode = demo
         statusBar = StatusBarController(controller: controller)
-        PetModel.shared.onChange = { [weak self] in self?.statusBar.refresh() }
+        PetModel.shared.onChange = { [weak self] in
+            self?.statusBar.refresh()
+            self?.controller.poke()
+        }
 
         do {
             let s = try HookServer(port: Prefs.port)
@@ -39,6 +42,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         controller.start()
+        watchPower()
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev"
         Diag.log("launched \(version) pid \(ProcessInfo.processInfo.processIdentifier), Accessibility trusted: \(WindowRaiser.isTrusted)")
 
@@ -64,6 +68,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if a.runModal() == .alertFirstButtonReturn {
                 statusBar.installHooks()
             }
+        }
+    }
+
+    /// The frame loop reacts to app switches and to waking up the moment they happen
+    /// rather than polling for them, and idles while the display is asleep. The
+    /// transcript scanner slows down then too.
+    private func watchPower() {
+        let nc = NSWorkspace.shared.notificationCenter
+        nc.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.controller.poke()
+        }
+        nc.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.controller.poke()
+        }
+        nc.addObserver(forName: NSWorkspace.screensDidSleepNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.controller.screenAsleep = true
+            self?.scanner.throttled = true
+        }
+        nc.addObserver(forName: NSWorkspace.screensDidWakeNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.controller.screenAsleep = false
+            self?.scanner.throttled = false
         }
     }
 

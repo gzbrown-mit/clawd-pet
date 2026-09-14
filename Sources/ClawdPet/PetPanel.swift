@@ -146,6 +146,9 @@ final class PetController {
     private var editorFrontSince: Date?
     private var stepTimer: Timer?
     private var secondTimer: Timer?
+    private var lastTip = ""
+    /// Nobody can see him while the display is off, so the loop idles until it wakes.
+    var screenAsleep = false { didSet { if oldValue != screenAsleep { poke() } } }
 
     static let editorBundleIDs = [
         "com.microsoft.VSCode", "com.microsoft.VSCodeInsiders",
@@ -172,14 +175,28 @@ final class PetController {
     func start() {
         panel.setFrameOrigin(pos)
         panel.orderFrontRegardless()
+        // The frame loop paces itself: after every frame it books the next one for
+        // when it is actually needed (see `pace`), so standing still costs a few
+        // wakeups a second rather than thirty. Tolerances let macOS batch the
+        // wakeups with whatever else is due around the same time.
         stepTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in self?.step() }
         RunLoop.main.add(stepTimer!, forMode: .common)
         secondTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             guard let self = self else { return }
             self.model.tick()
-            self.view.toolTip = self.tooltip()
+            let tip = self.tooltip()
+            if tip != self.lastTip {
+                self.lastTip = tip
+                self.view.toolTip = tip
+            }
         }
+        secondTimer!.tolerance = 0.25
         RunLoop.main.add(secondTimer!, forMode: .common)
+    }
+
+    /// Runs the next frame straight away: something happened that he should react to.
+    func poke() {
+        stepTimer?.fireDate = Date()
     }
 
     func resetHome() {
@@ -208,7 +225,28 @@ final class PetController {
     // MARK: Frame loop
 
     private func step() {
+        let delay = advance()
+        stepTimer?.tolerance = delay * 0.1
+        stepTimer?.fireDate = Date().addingTimeInterval(delay)
+    }
+
+    /// How long the loop may sleep after a frame. Moving needs the full 30 Hz the
+    /// physics assumes; standing still only needs the animation's next frame, capped
+    /// at a second so timed moods (sleep after 90 s, the end of a sulk) still change
+    /// on time. Anything that needs an instant reaction calls `poke` instead.
+    private func pace(moved: Bool, anim: Animation?, now: Date) -> TimeInterval {
+        if screenAsleep { return 30 }
+        if moved { return 1.0 / 30.0 }
+        guard let anim = anim else { return 1 }
+        let elapsed = now.timeIntervalSince(animStart)
+        let untilNextFrame = anim.frameDuration - elapsed.truncatingRemainder(dividingBy: anim.frameDuration)
+        return min(max(untilNextFrame, 0.02), 1)
+    }
+
+    /// One frame. Returns how long until the next one is needed.
+    private func advance() -> TimeInterval {
         let now = Date()
+        let before = pos
         if dragStart == nil, tossVel == nil {
             let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? ""
             let editorFront = PetController.editorBundleIDs.contains(front)
@@ -233,7 +271,7 @@ final class PetController {
                 pos = home
                 goingHome = false
                 panel.setFrameOrigin(pos)
-                return
+                return pace(moved: false, anim: nil, now: now)
             }
             if !panel.isVisible { panel.orderFrontRegardless() }
         }
@@ -278,6 +316,7 @@ final class PetController {
         }
         let deco: [Overlay] = model.mess ? [Overlays.mess] : []
         if deco.count != view.decorations.count { view.decorations = deco }
+        return pace(moved: pos != before || tossVel != nil || dragStart != nil, anim: anim, now: now)
     }
 
     private func chooseActivity(_ now: Date) -> (Activity, CGPoint?) {

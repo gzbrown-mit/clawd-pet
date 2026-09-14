@@ -111,7 +111,7 @@ enum Attention: String {
     }
 }
 
-struct Session {
+struct Session: Equatable {
     let id: String
     var cwd: String
     var working = false
@@ -147,7 +147,14 @@ final class PetModel {
     var lastScanAt: Date?
     var fiveHour: RateLimit?
     var sevenDay: RateLimit?
-    var happiness: Double = Prefs.happiness { didSet { Prefs.happiness = max(0, min(100, happiness)) } }
+    /// Kept within 0...100. It is written to disk only when the whole number changes:
+    /// the once-a-second drift would otherwise wake the preferences daemon every second.
+    var happiness: Double = Prefs.happiness {
+        didSet {
+            happiness = max(0, min(100, happiness))
+            if Int(happiness) != Int(oldValue) { Prefs.happiness = happiness }
+        }
+    }
     var mess = false
     var messSince: Date?
     var lastActivityAt = Date.distantPast
@@ -327,6 +334,7 @@ final class PetModel {
         let now = Date()
         lastScanAt = now
         var newlyFinished: [Session] = []
+        var changed = false
         for snap in snapshots {
             if let ended = endedAt[snap.id], snap.modified <= ended { continue }
             let isNew = sessions[snap.id] == nil
@@ -357,9 +365,13 @@ final class PetModel {
                 }
                 if s.working, snap.modified > lastActivityAt { lastActivityAt = snap.modified }
             }
-            sessions[snap.id] = s
+            if sessions[snap.id] != s {
+                sessions[snap.id] = s
+                changed = true
+            }
         }
-        onChange?()
+        // Most scans find nothing new, and only a real change is worth waking anyone for.
+        if changed { onChange?() }
         for s in newlyFinished where s.watched { onAttention?(s) }
     }
 
